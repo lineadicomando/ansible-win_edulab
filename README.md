@@ -41,7 +41,7 @@ cd ansible-win_edulab
 ### 2. Create the vault password file
 
 ```bash
-echo 'your-vault-password' > .ansible-vault-pass.txt
+$EDITOR .ansible-vault-pass.txt
 chmod 600 .ansible-vault-pass.txt
 ```
 
