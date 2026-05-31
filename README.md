@@ -53,6 +53,9 @@ cp inventories/school/group_vars/all/vault.yaml.example \
 
 # Edit vault.yaml with the real credentials, then encrypt it
 ansible-vault encrypt inventories/school/group_vars/all/vault.yaml
+
+# To edit the vault later
+ansible-vault edit inventories/school/group_vars/all/vault.yaml
 ```
 
 `vault.yaml` variables:
