@@ -1,0 +1,15 @@
+---
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: lab_win
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake host
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: lab_win
+
+- name: Deploy SEB classroom
+  ansible.builtin.import_playbook: ../playbooks/seb_classroom.yaml

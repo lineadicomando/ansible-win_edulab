@@ -1,0 +1,22 @@
+---
+- name: Coding Packages
+  hosts: "{{ target_hosts | default('lab_coding') }}" # override: -e target_hosts=<group>
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "libreoffice"
+          - "chrome"
+          - "edge"
+          - "firefox"
+          - "brave"
+          - "gimp"
+          - "inkscape"
+          - "ntop"
+          - "p7zip"
+          - "puredata"
+          - "postman"
+          - "vscode"
+          - "python314"
+          - "embarcadero_devcpp"

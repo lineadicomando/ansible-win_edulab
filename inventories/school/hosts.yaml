@@ -1,0 +1,50 @@
+---
+all:
+  children:
+    servers:
+      hosts:
+        samba_ad_dc:
+          ansible_host: 172.16.0.3
+          ansible_mac: 52:54:00:38:64:a0
+    teachers:
+      hosts:
+        teacher:
+          ansible_host: 172.16.2.10
+          ansible_mac: 52:54:00:1c:82:8e
+    students:
+      hosts:
+        student01:
+          ansible_host: 172.16.2.11
+          ansible_mac: 52:54:00:a6:db:78
+        student02:
+          ansible_host: 172.16.2.12
+          ansible_mac: 52:54:00:bf:d8:d6
+    lab_win:
+      hosts:
+        teacher:
+        student01:
+        student02:
+    lab_cad:
+      hosts:
+        teacher:
+        student01:
+        student02:
+    lab_coding:
+      hosts:
+        teacher:
+        student01:
+        student02:
+    windows11:
+      hosts:
+        teacher:
+        student01:
+        student02:
+    debian13:
+      hosts:
+        samba_ad_dc:
+    # samba_dc is a convention required by the lineadicomando.samba_ad_dc collection.
+    # The samba.yaml and samba_dc_backup.yaml playbooks default to this group so that
+    # AD management commands are never accidentally broadcast to non-DC hosts.
+    samba_dc:
+      hosts:
+        samba_ad_dc:

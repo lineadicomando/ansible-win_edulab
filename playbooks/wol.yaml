@@ -1,0 +1,9 @@
+---
+- name: Wake on LAN
+  hosts: "{{ target_hosts | default('lab_win') }}"  # override: -e target_hosts=<group>
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "wol"

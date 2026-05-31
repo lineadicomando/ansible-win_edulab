@@ -1,0 +1,20 @@
+---
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm:
+      - lab_win
+      - lab_win
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake host
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: lab_win
+
+- name: Build Samba AD DC
+  ansible.builtin.import_playbook: ../playbooks/samba_dc_build.yaml
+
+- name: Join Samba AD DC
+  ansible.builtin.import_playbook: ../playbooks/samba_dc_join.yaml

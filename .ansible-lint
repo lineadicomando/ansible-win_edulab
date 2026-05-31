@@ -1,0 +1,20 @@
+---
+# Mirrors .gitignore: ansible-lint has no native gitignore support
+exclude_paths:
+  - "**/vault.yaml"
+  - inventories/ario_info/
+  - inventories/ario_ling/
+  - inventories/spalla_info1/
+  - inventories/spalla_info2/
+  - inventories/spalla_ling/
+  - ansible_collections/
+  - temp/
+  - local/
+
+skip_list:
+  # win_workman uses win_workman_ as a shared cross-role namespace by design;
+  # role-prefixed names would break the collection API.
+  - var-naming[no-role-prefix]
+  # Remaining long lines are ansible_ssh_common_args strings and embedded
+  # PowerShell snippets that cannot be meaningfully wrapped.
+  - yaml[line-length]

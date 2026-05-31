@@ -1,0 +1,10 @@
+---
+- name: Autologon Example
+  hosts: "{{ target_hosts | default('lab_win') }}"  # override: -e target_hosts=<group>
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "autologon"
+        win_workman_autologon_restart: true
