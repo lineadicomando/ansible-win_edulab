@@ -1,0 +1,65 @@
+---
+ansible_user: maint
+ansible_password: "{{ ansible_vault_password }}"
+ansible_become_password: "{{ ansible_vault_become_password }}"
+ansible_domain: "cmdln.internal"
+ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub
+# SECURITY NOTE: StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null disable host
+# key verification, making connections vulnerable to MITM attacks. Acceptable only in
+# isolated lab networks where hosts are provisioned and re-imaged frequently. Do NOT use
+# in production or internet-facing environments. UpdateHostKeys=no prevents the client
+# from updating its known_hosts, which avoids spurious warnings on re-imaged hosts but
+# also suppresses legitimate key-change alerts. LogLevel=ERROR silences informational
+# output; raise it to DEBUG when troubleshooting connection issues.
+#
+# Production equivalent (strict host verification, persistent known_hosts, quiet output):
+#   ansible_ssh_common_args: >-
+#     -i {{ ansible_ssh_pub_key_path }}
+#     -o StrictHostKeyChecking=yes
+#     -o UserKnownHostsFile=~/.ssh/known_hosts
+#     -o UpdateHostKeys=yes
+#     -o LogLevel=ERROR
+ansible_ssh_common_args: >-
+  -i {{ ansible_ssh_pub_key_path }}
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+  -o UpdateHostKeys=no
+  -o LogLevel=ERROR
+
+win_workman_storage_path: /srv/ansible/storage
+win_workman_veyon_keypairs_dir: "{{ win_workman_storage_path }}/veyon/Teacher"
+win_workman_restart_timeout: 600
+
+# Samba Active Directory Domain Controller — samba_dc_build role
+samba_dc_build_realm: CMDLN.INTERNAL
+samba_dc_build_domain: CMDLN
+samba_dc_build_fqdn: dc.cmdln.internal
+samba_dc_build_search_domain: cmdln.internal
+samba_dc_build_nameserver: 127.0.0.1
+samba_dc_build_address: 172.16.0.3
+samba_dc_build_netmask: 255.255.255.0
+samba_dc_build_gateway: 172.16.0.1
+samba_dc_build_ifname: enp1s0
+samba_dc_build_ntp_server: 172.16.0.1
+samba_dc_build_ntp_allow_network: 172.16.0.0/16
+samba_dc_build_administrator_passwd: "{{ ansible_vault_password }}"
+samba_dc_build_administrator_username: admin
+
+# samba_win_join role — variabili condivise con samba_dc_build
+samba_win_join_realm: "{{ samba_dc_build_realm }}"
+samba_win_join_search_domain: "{{ samba_dc_build_search_domain }}"
+samba_win_join_administrator_username: "{{ samba_dc_build_administrator_username }}"
+samba_win_join_administrator_passwd: "{{ samba_dc_build_administrator_passwd }}"
+
+# Browsers shortcuts
+win_workman_browser_shortcut_url: https://lineadicomando.it
+win_workman_brave_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
+win_workman_chrome_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
+win_workman_edge_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
+win_workman_firefox_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
+
+win_workman_opera_shortcuts: true
+win_workman_opera_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
+win_workman_opera_shortcut_no_first_run: true
+
+win_workman_seb_account_chooser:

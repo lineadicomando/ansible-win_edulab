@@ -1,0 +1,31 @@
+---
+- name: Routine maintenance — Updates and system cleanup
+  hosts: "{{ target_hosts | default('lab_win') }}"
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "lock-on"
+          - "wu-run"
+          - "wim"
+          - "sfc"
+          - "chrome"
+          - "edge"
+          - "wallpaper-set"
+          - "wallpaper-lock"
+          - "wallpaper-clear_history"
+          - "wu-pause"
+          - "ms_account-on"
+          - "restart"
+        win_workman_mode_title: "Maintenance in progress"
+        win_workman_mode_text: "Do not turn off the PC. Maintenance is almost complete."
+
+- name: Routine maintenance — Unlock workstations
+  hosts: "{{ target_hosts | default('lab_win') }}"
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "lock-off"

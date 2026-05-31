@@ -1,0 +1,21 @@
+.claude/settings.local.json
+.mcp.json
+*.pyc
+__pycache__/
+.ansible-vault-pass.txt
+*.retry
+temp/
+
+# Collections are installed via: ansible-galaxy collection install -r requirements.yml -p .
+.ansible/
+ansible_collections/
+
+# Ansible vault files (contain secrets, use vault.yaml.example as template)
+vault.yaml
+
+# Include all inventories except school (site-specific, configure per-site)
+inventories/*
+!inventories/school
+
+# Custom site-specific playbooks (not part of the repo)
+local/

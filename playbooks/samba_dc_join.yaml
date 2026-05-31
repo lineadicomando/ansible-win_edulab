@@ -1,0 +1,6 @@
+---
+- name: Join AD DC Test
+  hosts: "{{ target_hosts | default('lab_win') }}"
+  gather_facts: false
+  roles:
+    - role: lineadicomando.samba_ad_dc.samba_win_join

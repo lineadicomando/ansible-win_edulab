@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "win-workman": {
+      "command": "python3",
+      "args": ["/path/to/ansible-collection-win_workman/mcp/server.py"],
+      "env": {
+        "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
+      }
+    },
+    "samba-ad-dc": {
+      "command": "python3",
+      "args": ["/path/to/ansible-collection-samba_ad_dc/mcp/server.py"],
+      "env": {
+        "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
+      }
+    },
+    "win-edulab": {
+      "command": "python3",
+      "args": ["./mcp/server.py"]
+    }
+  }
+}

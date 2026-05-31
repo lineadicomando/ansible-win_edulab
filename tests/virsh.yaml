@@ -1,0 +1,91 @@
+---
+- name: Manage VM via virsh
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  vars:
+    snapshot: ~
+    cmd: ~
+    vm_map:
+      samba_ad_dc: "CMDLN-SRV-Samba-AD-DC"
+      teacher: "CMDLN-LABW-Teacher"
+      student01: "CMDLN-LABW-Student01"
+      student02: "CMDLN-LABW-Student02"
+    vm: []
+    allowed_cmd:
+      - snapshot-revert
+      - start
+      - shutdown
+      - reboot
+      - reset
+  tasks:
+    - name: Validate cmd input
+      ansible.builtin.assert:
+        that:
+          - cmd is string
+          - cmd | trim | length > 0
+          - cmd in allowed_cmd
+        fail_msg: "La variabile `cmd` deve essere valorizzata (es. start)."
+
+    - name: Snapshot Revert
+      ansible.builtin.assert:
+        that:
+          - snapshot is string
+          - snapshot | trim | length > 0
+        fail_msg: "La variabile `snapshot` deve essere valorizzata (es. baseline)."
+      when:
+        - cmd == 'snapshot-revert'
+    - name: Normalize vm when passed as string
+      ansible.builtin.set_fact:
+        vm: ["{{ vm }}"]
+      when: vm is string
+
+    - name: Validate vm input
+      ansible.builtin.assert:
+        that:
+          - vm is sequence
+          - vm | length > 0
+        fail_msg: "Passa `vm` come lista non vuota di host/gruppi di inventario."
+
+    - name: Expand vm entities to inventory hosts
+      ansible.builtin.set_fact:
+        vm_hosts: >-
+          {{
+            vm_hosts | default([]) +
+            query('inventory_hostnames', item)
+          }}
+      loop: "{{ vm }}"
+
+    - name: Deduplicate expanded hosts
+      ansible.builtin.set_fact:
+        vm_hosts: "{{ vm_hosts | unique }}"
+
+    - name: Map inventory hosts to virtual machine names
+      ansible.builtin.set_fact:
+        vm_names: "{{ vm_hosts | map('extract', vm_map) | list }}"
+
+    - name: Validate vm_map coverage for resolved hosts
+      ansible.builtin.assert:
+        that:
+          - (vm_names | reject('none') | list | length) == (vm_hosts | length)
+        fail_msg: >-
+          Mancano mapping in vm_map per uno o più host risolti da vm.
+          Hosts risolti: {{ vm_hosts }}
+          VM names: {{ vm_names }}
+
+    - name: Revert selected snapshot for selected VMs
+      ansible.builtin.command:
+        cmd: "virsh {{ params }}"
+      vars:
+        params: >-
+          {{
+            cmd +
+            " " +
+            item +
+            ( "" if cmd != 'snapshot-revert' else " " + snapshot )
+          }}
+      loop_control:
+        label: "virsh {{ params }}"
+      loop: "{{ vm_names }}"
+      changed_when: true

@@ -1,0 +1,51 @@
+---
+- name: Safe Exam Browser - Google Classroom
+  hosts: "{{ target_hosts | default('students') }}"  # override: -e target_hosts=<group>
+  gather_facts: false
+  vars:
+    account_chooser: "{{ win_workman_seb_account_chooser | default('') }}"
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "seb"
+          - "seb-deploy"
+        win_workman_seb_client_settings_dest: 'C:\\ProgramData\\SafeExamBrowser\\SebClientSettings.seb'
+        win_workman_seb_client_settings:
+          startURL: "https://accounts.google.com/AccountChooser?hd={{ account_chooser }}&continue=https://classroom.google.com/"
+          createNewDesktop: true
+          killExplorerShell: true
+          allowScreenSharing: true
+          enableLogging: true
+          logDirectoryWin: 'C:\\ProgramData\\SafeExamBrowser\\Logs'
+          allowQuit: false
+          allowVirtualMachine: true
+          enableAltTab: false
+          insideSebEnableStartTaskManager: false
+          browserViewMode: 1
+          blockPopUpWindows: true
+          clipboardPolicy: 1
+          removeBrowserProfile: true
+          URLFilterEnable: true
+          URLFilterEnableContentFilter: false
+          URLFilterRules:
+            - action: 1
+              active: true
+              expression: "^https://(.*[.])?google[.]com(/.*)?$"
+              regex: true
+            - action: 1
+              active: true
+              expression: "^https://(.*[.])?googletagmanager[.]com(/.*)?$"
+              regex: true
+            - action: 1
+              active: true
+              expression: "^https://(.*[.])?gstatic[.]com(/.*)$"
+              regex: true
+            - action: 0 # Block specific google.com subdomains not allowed for exam
+              active: true
+              expression: "^https://gemini[.]google[.]com"
+              regex: true
+            - action: 0 # Block specific google subdomains not allowed for exam
+              active: true
+              expression: "^https://notebooklm[.]google"
+              regex: true

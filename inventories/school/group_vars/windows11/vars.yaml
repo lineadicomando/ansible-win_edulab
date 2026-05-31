@@ -1,0 +1,6 @@
+ansible_connection: ssh
+ansible_shell_type: powershell
+ansible_remote_tmp: C:\Windows\Temp\ansible
+ansible_description: "Windows 11 Workstation"
+ansible_subnet: 172.16.2.0/24
+ansible_broadcast: 172.16.2.255

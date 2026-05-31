@@ -1,0 +1,17 @@
+---
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: lab_cad
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake host
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: lab_cad
+
+- name: Deploy CAD lab
+  ansible.builtin.import_playbook: ../playbooks/lab_cad.yaml
+  vars:
+    target_hosts: lab_cad
