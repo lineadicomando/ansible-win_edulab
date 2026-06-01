@@ -27,7 +27,7 @@ ansible_ssh_common_args: >-
   -o LogLevel=ERROR
 
 win_workman_storage_path: /srv/ansible/storage
-win_workman_veyon_keypairs_dir: "{{ win_workman_storage_path }}/veyon/Teacher"
+win_workman_veyon_keypairs_dir: "{{ win_workman_storage_path }}/veyon/edulab"
 win_workman_restart_timeout: 600
 
 # Samba Active Directory Domain Controller — samba_dc_build role
