@@ -299,6 +299,22 @@ Used to call optional hook files (`before_install`, `after_install`) from a sche
 
 Looks for `roles/<schema_dir>/tasks/before_install.yaml`; skips if absent.
 
+### install_dep — install a role dependency, preserving schema context
+
+Installs another schema role as a dependency while saving and restoring `win_workman_schema_role_name` and `win_workman_schema_dir`. Use this instead of calling `include_role` directly, to prevent the dependency's `set_fact` calls from polluting the caller's hook context.
+
+```yaml
+- ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: install_dep
+  vars:
+    win_workman_dep_role: lineadicomando.win_workman.chrome   # required
+    win_workman_dep_action: "on"                              # optional, default "on"
+  when: win_workman_action | default('on', true) == 'on'
+```
+
+The save/restore is done via `set_fact`, so it always overrides any stale play-scoped values left by the dependency role.
+
 ---
 
 ## Typical custom action pattern

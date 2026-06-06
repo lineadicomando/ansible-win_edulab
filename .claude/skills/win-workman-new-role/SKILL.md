@@ -33,6 +33,15 @@ tasks/
 └── ...
 ```
 
+For roles with install/uninstall hooks, add the relevant hook files:
+```
+tasks/
+├── main.yaml
+├── after_install.yaml    # runs after pkg_act_on installs the package
+├── after_uninstall.yaml  # runs after pkg_act_off uninstalls the package
+└── ...                   # before_install.yaml, before_uninstall.yaml also supported
+```
+
 ---
 
 ## Step 1 — vars/main.yaml (schema definition)
@@ -126,7 +135,7 @@ win_workman_<schema>_schema:
 
 ## Step 2 — tasks/main.yaml
 
-### Simple role (no custom actions)
+### Simple role (no custom actions, no hooks)
 
 ```yaml
 ---
@@ -161,6 +170,81 @@ win_workman_<schema>_schema:
     win_workman_schema: "{{ win_workman_<schema>_schema }}"
   when: win_workman_action not in ["my_action"]
 ```
+
+### Role with install/uninstall hooks
+
+Pass `win_workman_schema_hooks` as `vars:` directly to the `pkg_workflow` call — **not** in `defaults/main.yaml`. This scopes the hooks to the role's own workflow and prevents them from bleeding into dependency roles called beforehand.
+
+```yaml
+---
+- name: Dispatch to package workflow
+  ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: pkg_workflow
+  vars:
+    win_workman_schema: "{{ win_workman_<schema>_schema }}"
+    win_workman_schema_hooks:
+      after_install: true    # requires tasks/after_install.yaml
+      after_uninstall: true  # requires tasks/after_uninstall.yaml
+```
+
+Each hook file is a standard task list. Use `win_workman_install_result.changed` / `win_workman_uninstall_result.changed` / `win_workman_uninstall_via_helper_result.changed` to guard conditional steps:
+
+```yaml
+# tasks/after_install.yaml
+---
+- name: Reboot after install
+  ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: restart
+  when: win_workman_install_result.changed | default(false) | bool
+```
+
+```yaml
+# tasks/after_uninstall.yaml
+---
+- name: Reboot after uninstall
+  ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: restart
+  when: >-
+    (win_workman_uninstall_result.changed | default(false) | bool)
+    or (win_workman_uninstall_via_helper_result.changed | default(false) | bool)
+```
+
+### Role with a dependency on another schema role
+
+Use `install_dep` from `pkg_utils` to install a dependency before dispatching. This preserves `win_workman_schema_role_name` / `win_workman_schema_dir` after the dependency's `set_fact` calls would otherwise overwrite them.
+
+`win_workman_action` passed by the dispatcher is `""` when no action is specified in the task string — use `default('on', true)` (not bare `default('on')`) so the condition fires for both undefined and empty string:
+
+```yaml
+---
+- name: Install dependency
+  ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: install_dep
+  vars:
+    win_workman_dep_role: lineadicomando.win_workman.<dep_schema>
+  when: win_workman_action | default('on', true) == 'on'
+
+- name: Set schema role context
+  ansible.builtin.set_fact:
+    win_workman_schema_role_name: lineadicomando.win_workman.<schema>
+    win_workman_schema_dir: <schema>
+
+- name: Dispatch to package workflow
+  ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: pkg_workflow
+  vars:
+    win_workman_schema: "{{ win_workman_<schema>_schema }}"
+    win_workman_schema_hooks:
+      after_install: true
+      after_uninstall: true
+```
+
+> The `Set schema role context` `set_fact` is required when a dependency is installed first, because the dependency's own `Set schema role context` overwrites `win_workman_schema_role_name` at play scope. Place it immediately before the `pkg_workflow` dispatch.
 
 ---
 
@@ -218,6 +302,9 @@ Update `docs/index.md` to add the role to the catalog table.
 
 - [ ] `vars/main.yaml` — schema defined, `win_workman_schema_role_name` and `win_workman_schema_dir` set
 - [ ] `tasks/main.yaml` — delegates to `pkg_workflow` (or custom dispatchers + `pkg_workflow`)
+- [ ] `tasks/main.yaml` — hooks passed via `vars:` to `pkg_workflow`, not in `defaults/`
+- [ ] `tasks/main.yaml` — dependencies use `install_dep`; `set_fact` to restore context placed before `pkg_workflow`
+- [ ] `tasks/main.yaml` — action conditions use `default('on', true)` (not bare `default('on')`)
 - [ ] `meta/main.yaml` — present
 - [ ] `docs/roles/<schema>.md` — created from template
 - [ ] `docs/index.md` — role added to catalog table

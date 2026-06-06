@@ -19,7 +19,7 @@ description: Use when writing, parsing, or debugging win_workman task strings â€
 
 | Task string | schema | action | args |
 |-------------|--------|--------|------|
-| `chrome` | chrome | on | [] |
+| `chrome` | chrome | *(default)* | [] |
 | `chrome-off` | chrome | off | [] |
 | `chrome-on-32bit` | chrome | on | [32bit] |
 | `vscode-download` | vscode | download | [] |
@@ -57,11 +57,20 @@ The `dispatcher` role calls the `parse_tasks` filter (Python plugin) to convert 
 {
   "task":   "chrome-on-32bit",   # original string
   "schema": "chrome",            # token[0]
-  "act":    "on",                # token[1] (default "on")
+  "act":    "on",                # token[1], or "" if absent
   "argc":   3,                   # total token count
   "argv":   ["chrome", "on", "32bit"]  # all tokens
 }
 ```
+
+> **`act` is `""` (empty string) when no action is specified** â€” e.g. `chrome`, `vscode`.
+> `pkg_workflow` resolves the effective action as `win_workman_action or win_workman_schema.default_action`.
+> In role task files, always use `default('on', true)` (not bare `default('on')`) when comparing
+> against action strings, so the fallback fires for both undefined and empty string:
+>
+> ```yaml
+> when: win_workman_action | default('on', true) == 'on'
+> ```
 
 ### Reading args in a role
 
@@ -198,7 +207,7 @@ Returns:
 ```json
 [
   {"task": "chrome-on-32bit", "schema": "chrome", "act": "on", "argc": 3, "argv": ["chrome", "on", "32bit"]},
-  {"task": "vscode", "schema": "vscode", "act": "on", "argc": 1, "argv": ["vscode"]},
+  {"task": "vscode", "schema": "vscode", "act": "", "argc": 1, "argv": ["vscode"]},
   {"task": "wu-pause", "schema": "wu", "act": "pause", "argc": 2, "argv": ["wu", "pause"]}
 ]
 ```
