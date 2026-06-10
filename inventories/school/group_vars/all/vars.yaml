@@ -62,4 +62,6 @@ win_workman_opera_shortcuts: true
 win_workman_opera_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
 win_workman_opera_shortcut_no_first_run: true
 
-win_workman_seb_account_chooser:
+win_workman_seb_account_chooser: ""
+
+win_workman_gcpw_domains_allowed_to_login: ""
