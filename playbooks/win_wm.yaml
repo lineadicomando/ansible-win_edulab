@@ -1,2 +1,3 @@
 ---
-- ansible.builtin.import_playbook: lineadicomando.win_workman.win_workman
+- name: Windows workstations manager playbook
+  ansible.builtin.import_playbook: lineadicomando.win_workman.win_workman
