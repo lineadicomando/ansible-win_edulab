@@ -11,8 +11,8 @@ from inventory import list_inventories, load_inventory
 app = Server("win-edulab")
 
 
-@app.list_tools()
-async def list_tools() -> list[Tool]:
+def _get_tools() -> list[Tool]:
+    """Generate list of available tools."""
     return [
         Tool(
             name="get_inventory",
@@ -72,6 +72,11 @@ async def list_tools() -> list[Tool]:
             },
         ),
     ]
+
+
+@app.list_tools()
+async def list_tools() -> list[Tool]:
+    return _get_tools()
 
 
 @app.call_tool()
