@@ -1,9 +1,10 @@
 import asyncio
 import json
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent, Tool, CallToolResult, ListToolsResult, PaginatedRequestParams, CallToolRequestParams
 
 from ansible_runner import build_playbook_command, run_command
 from inventory import list_inventories, load_inventory
@@ -74,32 +75,39 @@ def _get_tools() -> list[Tool]:
     ]
 
 
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    return _get_tools()
+async def handle_list_tools(params: PaginatedRequestParams) -> ListToolsResult:
+    return ListToolsResult(tools=_get_tools())
 
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def handle_call_tool(params: CallToolRequestParams) -> CallToolResult:
+    name = params.name
+    arguments = params.arguments or {}
+
     if name == "get_inventory":
         inventory = arguments.get("inventory", "school")
         try:
             data = load_inventory(inventory)
         except FileNotFoundError as e:
-            return [TextContent(type="text", text=f"Error: {e}")]
-        return [TextContent(type="text", text=json.dumps(data, indent=2))]
+            return CallToolResult(content=[TextContent(type="text", text=f"Error: {e}")])
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
 
     if name == "run_playbook":
-        playbook: str = arguments["playbook"]
+        playbook: str = arguments.get("playbook")
+        if not playbook:
+            return CallToolResult(content=[TextContent(type="text", text="Error: playbook is required")])
         l: str = arguments.get("l", "all")
         e: dict = arguments.get("e") or {}
         inventory: str = arguments.get("inventory", "school")
 
         cmd = build_playbook_command(playbook, l, e or None, inventory)
         output = await asyncio.to_thread(run_command, cmd)
-        return [TextContent(type="text", text=output)]
+        return CallToolResult(content=[TextContent(type="text", text=output)])
 
-    return [TextContent(type="text", text=f"Unknown tool: {name}")]
+    return CallToolResult(content=[TextContent(type="text", text=f"Unknown tool: {name}")])
+
+
+app.add_request_handler("tools/list", PaginatedRequestParams, handle_list_tools)
+app.add_request_handler("tools/call", CallToolRequestParams, handle_call_tool)
 
 
 async def main():
