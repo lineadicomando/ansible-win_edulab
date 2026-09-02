@@ -15,6 +15,17 @@ Agent instructions and directives for this project.
 - Before executing a task, call `get_role_info` if you're unsure which actions are available
 - Execute Ansible commands directly via shell only when the task is not available through the configured MCP services
 
+### 1b. MCP services as continuous control tests
+
+**Rule**: Every use of MCP services in normal work is also a test of service health. Never bypass MCP to avoid testing overhead.
+
+**Why**: Using MCP services during regular work catches configuration issues, API breakage, and regressions early. If you skip the MCP layer to "just read the file", you lose visibility into whether the services actually work when needed.
+
+**How to apply**:
+- Always route requests through MCP first, even for simple lookups (inventory queries, role info, configuration reads)
+- If an MCP call fails, treat it as a real issue to diagnose—do not fall back to direct file reads as a workaround
+- Each successful MCP call verifies that the service, credentials, and configuration are working correctly
+
 ### 2. Detect and handle missing essential configuration
 
 **Rule**: Before attempting to execute MCP tasks, proactively detect missing essential configuration (inventories, encrypted vaults, SSH keys) and signal the issue clearly to the user.
