@@ -3,6 +3,7 @@ import json
 from typing import Any
 
 from mcp.server import Server
+from mcp.server.context import ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool, CallToolResult, ListToolsResult, PaginatedRequestParams, CallToolRequestParams
 
@@ -75,11 +76,11 @@ def _get_tools() -> list[Tool]:
     ]
 
 
-async def handle_list_tools(params: PaginatedRequestParams) -> ListToolsResult:
+async def handle_list_tools(ctx: ServerRequestContext, params: PaginatedRequestParams) -> ListToolsResult:
     return ListToolsResult(tools=_get_tools())
 
 
-async def handle_call_tool(params: CallToolRequestParams) -> CallToolResult:
+async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
     name = params.name
     arguments = params.arguments or {}
 
