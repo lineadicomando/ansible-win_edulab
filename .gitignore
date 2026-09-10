@@ -20,3 +20,6 @@ inventories/*
 
 # Custom site-specific playbooks (not part of the repo)
 local/
+
+# MCP run logs (per-run output of the Ansible runners)
+logs/
