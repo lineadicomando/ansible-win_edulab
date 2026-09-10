@@ -101,7 +101,7 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
         inventory: str = arguments.get("inventory", "school")
 
         cmd = build_playbook_command(playbook, l, e or None, inventory)
-        output = await asyncio.to_thread(run_command, cmd)
+        output = await asyncio.to_thread(run_command, cmd, f"{playbook}-{l}")
         return CallToolResult(content=[TextContent(type="text", text=output)])
 
     return CallToolResult(content=[TextContent(type="text", text=f"Unknown tool: {name}")])

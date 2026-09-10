@@ -1,6 +1,7 @@
 import json
-import subprocess
 from pathlib import Path
+
+from runlog import run_logged
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -21,14 +22,10 @@ def build_playbook_command(
     return cmd
 
 
-def run_command(cmd: list[str]) -> str:
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        cwd=str(PROJECT_ROOT),
-    )
-    output = result.stdout
+def run_command(cmd: list[str], label: str = "run") -> str:
+    """Run an ansible-playbook command, streaming its output to a log file."""
+    result = run_logged(cmd, PROJECT_ROOT, label)
+    output = result.output
     if result.returncode != 0:
-        output += f"\nSTDERR:\n{result.stderr}"
-    return output
+        output += f"\n[exit code {result.returncode}]"
+    return f"{output}\n[log] {result.log_path}"

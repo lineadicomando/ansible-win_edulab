@@ -10,8 +10,9 @@ the collection to Claude Code. It lets you manage lab workstations in natural la
 Claude Code
     │  MCP (stdio)
     ▼
-mcp/server.py          ← MCP server, exposes three tools
+mcp/server.py          ← MCP server, exposes get_inventory and run_playbook
     ├── ansible_runner.py   ← builds and runs ansible-playbook subprocesses
+    ├── runlog.py           ← streams each run to a log file under logs/
     └── inventory.py        ← parses hosts.yaml files, lists available roles
          │
          ▼
@@ -308,6 +309,47 @@ hosts) or when the action is `off`, `shutdown`, or `restart`.
 
 ---
 
+## Run logs
+
+Every tool call that runs `ansible-playbook` streams its output to a log file under
+`logs/` **while the playbook is still running**, so you can watch it progress instead
+of waiting for the tool call to return. The directory is gitignored.
+
+```
+logs/
+├── 20260910-095603-veyon-lab_ario_info.log
+├── 20260910-100112-win_wm-chrome-teacher.log
+└── latest.log -> 20260910-100112-win_wm-chrome-teacher.log
+```
+
+Leave a terminal open on the symlink and you see whatever starts next, from any of the
+three MCP servers:
+
+```bash
+tail -F logs/latest.log
+```
+
+`-F` rather than `-f`: it follows the file *by name*, so it picks up the next run when
+`latest.log` is repointed.
+
+File names are `<timestamp>-<label>.log`, where the label identifies the call
+(`veyon-lab_ario_info`, `win_wm-chrome_info-teacher`, `samba-user-list-dc`). The first
+line of each log is the exact command that ran, the last is its exit code. The path is
+also appended to the tool result as `[log] …`, so the agent can point you at it.
+
+Only the newest 50 logs are kept; older ones are dropped as new runs start.
+Set `ANSIBLE_MCP_LOG_DIR` to write them somewhere else.
+
+### Why the output streams
+
+Ansible does not flush its own stdout — it leaves that to the system and flushes at
+shutdown — so over a pipe its output would only arrive in blocks. The runners launch it
+with `PYTHONUNBUFFERED=1`, which restores line-by-line output. They also give the
+playbook `stdin=DEVNULL`: the MCP server's own stdin is the JSON-RPC stream, and must
+never be handed to a playbook that decides to prompt.
+
+---
+
 ## Troubleshooting
 
 ### Server does not load / tools not available
@@ -372,18 +414,28 @@ switch to an absolute path:
 
 ```
 mcp/
-├── server.py           # MCP entry point — declares and dispatches the three tools
+├── server.py           # MCP entry point — declares and dispatches get_inventory, run_playbook
 ├── ansible_runner.py   # Builds ansible-playbook command lists, runs subprocesses
 ├── inventory.py        # Parses hosts.yaml, lists inventories and installed roles
+├── runlog.py           # Per-run log files under logs/, written while the playbook runs
 └── pyproject.toml      # Package metadata and dependencies (mcp>=1.0, pyyaml>=6.0)
 ```
 
 ### `ansible_runner.py`
 
-- `build_wm_command(t, l, inventory)` — builds the `win_wm.yaml` command list
-- `build_playbook_command(playbook, l, e, inventory)` — builds a generic playbook command
-- `run_command(cmd)` — runs via `subprocess.run`, returns combined stdout/stderr string
-- `format_command(cmd)` — pretty-prints a command list for display in `preview` output
+- `build_playbook_command(playbook, l, e, inventory)` — builds a playbook command list
+- `run_command(cmd, label)` — runs the command, tees its output to `logs/` line by line,
+  returns the combined stdout/stderr plus the log path
+
+The `run_tasks` and `samba` tools documented above belong to the `win-workman` and
+`samba-ad-dc` MCP servers, which live in their own collections and keep their own
+command builders.
+
+### `runlog.py`
+
+- `run_logged(cmd, root, label, timeout=None)` — runs a command with its output written
+  to `logs/<timestamp>-<label>.log` as it arrives, and `logs/latest.log` repointed at it;
+  returns `(output, returncode, log_path, timed_out)`
 
 ### `inventory.py`
 
