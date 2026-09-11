@@ -2,7 +2,7 @@
 ansible_user: maint
 ansible_password: "{{ ansible_vault_password }}"
 ansible_become_password: "{{ ansible_vault_become_password }}"
-ansible_domain: "cmdln.internal"
+ansible_domain: "school.internal"
 ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub
 # SECURITY NOTE: StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null disable host
 # key verification, making connections vulnerable to MITM attacks. Acceptable only in
@@ -31,17 +31,17 @@ win_workman_veyon_keypairs_dir: "{{ win_workman_storage_path }}/veyon/edulab"
 win_workman_restart_timeout: 600
 
 # Samba Active Directory Domain Controller — samba_dc_build role
-samba_dc_build_realm: CMDLN.INTERNAL
-samba_dc_build_domain: CMDLN
-samba_dc_build_fqdn: dc.cmdln.internal
-samba_dc_build_search_domain: cmdln.internal
+samba_dc_build_realm: SCHOOL.INTERNAL
+samba_dc_build_domain: SCHOOL
+samba_dc_build_fqdn: dc.school.internal
+samba_dc_build_search_domain: school.internal
 samba_dc_build_nameserver: 127.0.0.1
-samba_dc_build_address: 172.16.0.3
+samba_dc_build_address: 192.168.122.2
 samba_dc_build_netmask: 255.255.255.0
-samba_dc_build_gateway: 172.16.0.1
+samba_dc_build_gateway: 192.168.122.1
 samba_dc_build_ifname: enp1s0
-samba_dc_build_ntp_server: 172.16.0.1
-samba_dc_build_ntp_allow_network: 172.16.0.0/16
+samba_dc_build_ntp_server: 192.168.122.1
+samba_dc_build_ntp_allow_network: 192.168.122.0/24
 samba_dc_build_administrator_passwd: "{{ ansible_vault_password }}"
 samba_dc_build_administrator_username: admin
 

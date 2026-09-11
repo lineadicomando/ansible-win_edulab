@@ -8,10 +8,10 @@
     snapshot: ~
     cmd: ~
     vm_map:
-      samba_ad_dc: "CMDLN-SRV-Samba-AD-DC"
-      teacher: "CMDLN-LABW-Teacher"
-      student01: "CMDLN-LABW-Student01"
-      student02: "CMDLN-LABW-Student02"
+      samba_ad_dc: "deb13-samba-dc"
+      teacher: "win11-pc00"
+      student01: "win11-pc01"
+      student02: "win11-pc02"
     vm: []
     allowed_cmd:
       - snapshot-revert

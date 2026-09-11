@@ -4,20 +4,20 @@ all:
     servers:
       hosts:
         samba_ad_dc:
-          ansible_host: 172.16.0.3
+          ansible_host: 192.168.122.2
           ansible_mac: 52:54:00:38:64:a0
     teachers:
       hosts:
         teacher:
-          ansible_host: 172.16.2.10
+          ansible_host: 192.168.122.10
           ansible_mac: 52:54:00:1c:82:8e
     students:
       hosts:
         student01:
-          ansible_host: 172.16.2.11
+          ansible_host: 192.168.122.11
           ansible_mac: 52:54:00:a6:db:78
         student02:
-          ansible_host: 172.16.2.12
+          ansible_host: 192.168.122.12
           ansible_mac: 52:54:00:bf:d8:d6
     lab_win:
       hosts:
