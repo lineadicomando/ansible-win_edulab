@@ -66,3 +66,14 @@ Agent instructions and directives for this project.
   - Desktop management: `wallpaper`, `oobe`, `autologon`
 - When a user requests a task, check if a corresponding role exists before executing. If unsure, call `get_role_info` to verify the role name and available actions
 
+
+### 4. Write commit messages in English
+
+**Rule**: Git commit messages are always written in English, regardless of the language used in conversation.
+
+**Why**: The conversation language is Italian, but the repository history is a technical artifact meant to stay readable to any contributor and consistent with the code, which is written in English. Mixed-language history is hard to search and to skim.
+
+**How to apply**:
+- Subject line in the imperative mood, English: `Add the display_scale role for display scaling`
+- Body in English too, including the explanation of trade-offs and the reasoning behind the change
+- This applies to commit messages only — conversation, explanations, and answers to the user stay in Italian
