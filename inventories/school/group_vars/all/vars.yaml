@@ -42,7 +42,8 @@ samba_dc_build_gateway: 192.168.122.1
 samba_dc_build_ifname: enp1s0
 samba_dc_build_ntp_server: 192.168.122.1
 samba_dc_build_ntp_allow_network: 192.168.122.0/24
-samba_dc_build_administrator_passwd: "{{ ansible_vault_password }}"
+# samba_dc_build_administrator_passwd is defined in vault.yaml: the domain
+# administrator credential is deliberately kept separate from the SSH one.
 samba_dc_build_administrator_username: admin
 
 # samba_win_join role — variabili condivise con samba_dc_build
