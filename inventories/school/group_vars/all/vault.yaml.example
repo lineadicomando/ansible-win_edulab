@@ -1,2 +1,4 @@
-ansible_vault_password: "Yipe!!47"
-ansible_vault_become_password: "Yipe!!47"
+ansible_vault_password: "maint"
+ansible_vault_become_password: "maint"
+# At least 7 characters and AD complexity rules: samba-tool refuses anything less.
+samba_dc_build_administrator_passwd: "Ch4ngeMe!2026"
