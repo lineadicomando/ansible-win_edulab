@@ -22,7 +22,12 @@ ansible-playbook tests/virsh.yaml -e '{"vm":["teacher"],"cmd":"snapshot-revert",
 ```
 
 `vm` accepts inventory hostnames or group names. The playbook maps them to virsh VM names
-via `vm_map`. After revert the VM is powered off.
+via its own `vm_map`, defined in `tests/virsh.yaml` — read that mapping there rather than
+assuming a naming scheme. After revert the VM is powered off.
+
+`cmd` is restricted to the values in the playbook's `allowed_cmd` list. Use `start` when the
+VM is simply powered off and you do not want to discard its current state; `snapshot-revert`
+throws away everything since the snapshot.
 
 ### 2. Power on (Wake-on-LAN)
 
@@ -41,11 +46,32 @@ ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"secure_ssh"}'
 
 ### SSH access for manual verification
 
-| Host | Command |
-|------|---------|
-| teacher | `ssh maint@172.16.2.10` |
-| student01 | `ssh maint@172.16.2.11` |
-| student02 | `ssh maint@172.16.2.12` |
+Addresses and user names are **not** listed here: they live in the inventory and
+change when a lab is retargeted. Read them at use time.
+
+Preferred — the `win-edulab` MCP server, which returns only hosts, IPs and MACs:
+
+```
+get_inventory(inventory="school")
+```
+
+Or from the inventory, selecting just the field you need:
+
+```bash
+ansible-inventory -i inventories/<inv> --host <host> | jq -r '.ansible_host, .ansible_user'
+```
+
+Filter the output as shown. A bare `ansible-inventory --host` renders the vaulted
+variables too and prints lab passwords in clear text on the terminal.
+
+Then connect:
+
+```bash
+ssh <ansible_user>@<ansible_host>
+```
+
+The remote temp directory used by `copy` is `ansible_remote_tmp` in the same output,
+not a fixed `C:\Windows\Temp\ansible`.
 
 ---
 

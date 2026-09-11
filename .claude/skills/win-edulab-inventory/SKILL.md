@@ -109,8 +109,8 @@ win_workman_veyon_master: false
 students:
   hosts:
     student03:
-      ansible_host: 172.16.2.13
-      ansible_mac: 52:54:00:xx:xx:xx
+      ansible_host: <IP in the lab subnet>   # see ansible_subnet in group_vars/all
+      ansible_mac: <NIC MAC, needed by wol>
 lab_win:
   hosts:
     student03:
