@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from runlog import NotifyFn, RunResult, RunStatus, read_log, run_logged_async, start_logged
+from runlog import NotifyFn, RunResult, RunStatus, await_run, read_log, run_logged_async, start_logged
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -62,3 +62,14 @@ def start_run(
 def run_status(run: str = "latest", since_line: int = 0, max_lines: int = 200) -> RunStatus:
     """Read a run's log, whether it is still going or already finished."""
     return read_log(PROJECT_ROOT, run, since_line, max_lines)
+
+
+async def wait_run(
+    run: str = "latest",
+    timeout: float = 900.0,
+    since_line: int = 0,
+    max_lines: int = 200,
+    notify: NotifyFn | None = None,
+) -> RunStatus:
+    """Block until a background run ends, then read its log."""
+    return await await_run(PROJECT_ROOT, run, timeout, since_line, max_lines, notify)

@@ -37,6 +37,14 @@ KEEP_LOGS = 50
 # folded into one message per interval instead.
 PROGRESS_INTERVAL = 1.0
 
+# How often await_run looks at a running log. Ansible runs take minutes, so a
+# couple of seconds of latency costs nothing and keeps the polling cheap.
+WAIT_POLL_INTERVAL = 2.0
+
+# Lines await_run reads per poll to keep its progress summary current. Higher
+# than any single poll can produce, so the summary never falls behind.
+WAIT_PROGRESS_LINES = 10000
+
 NotifyFn = Callable[[int, str], Coroutine[Any, Any, None]]
 
 
@@ -71,12 +79,24 @@ def log_dir(root: Path) -> Path:
     return directory
 
 
+def done_path(log_path: Path) -> Path:
+    """The sentinel a finished run leaves next to its log.
+
+    A watcher outside this process — a shell loop, an editor, the agent
+    harness — needs one cheap, unambiguous thing to wait on. Waiting on the
+    runner process instead is easy to get wrong; waiting on a file is not.
+    """
+    return log_path.with_name(log_path.name + ".done")
+
+
 def _prune(directory: Path) -> None:
     for stale in sorted(directory.glob("20*.log"), reverse=True)[KEEP_LOGS:]:
-        try:
-            stale.unlink()
-        except OSError:
-            pass
+        # The sentinel goes with the log it belongs to, or it outlives it.
+        for path in (stale, done_path(stale)):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _point_latest_at(path: Path) -> None:
@@ -153,6 +173,19 @@ def new_log_path(root: Path, label: str) -> Path:
     # Claim the name now: a background run hands it out before writing to it.
     path.touch()
     return path
+
+
+def _write_done(path: Path, returncode: int, note: str) -> None:
+    """Drop the end-of-run sentinel, after the log has been flushed.
+
+    Order matters: whoever the sentinel wakes must find the log complete, not
+    still missing its last lines. Failing to write it is not worth losing a
+    run's result over — the end marker in the log says the same thing.
+    """
+    try:
+        done_path(path).write_text(f"{returncode} {note}".strip() + "\n", encoding="utf-8")
+    except OSError:
+        logger.debug("could not write the done sentinel for %s", path.name, exc_info=True)
 
 
 def run_logged(
@@ -237,6 +270,8 @@ def run_logged(
             timed_out = killed.is_set()
             note = f" (timed out after {timeout}s)" if timed_out else ""
             log.write(f"\n--- exit code {returncode}{note} ---\n")
+            log.flush()
+            _write_done(path, returncode, note)
 
     return RunResult("".join(chunks), returncode, path, timed_out)
 
@@ -400,6 +435,48 @@ def read_log(root: Path, run: str = "latest", since_line: int = 0, max_lines: in
         total_lines=len(all_lines),
     )
 
+
+async def await_run(
+    root: Path,
+    run: str = "latest",
+    timeout: float = 900.0,
+    since_line: int = 0,
+    max_lines: int = 200,
+    notify: NotifyFn | None = None,
+) -> RunStatus:
+    """Wait for a run to finish, then report it exactly as read_log would.
+
+    Returns as soon as the log carries its end marker, or when timeout expires.
+    A returned status still marked running means the wait ran out, not that the
+    run went wrong: call again to keep waiting.
+
+    While waiting it keeps sending progress notifications, which is what stops
+    a client from timing the call out halfway through a long playbook.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(0.0, timeout)
+    summary = ProgressSummary()
+    cursor = since_line
+    message = "waiting"
+    wanted = notify is not None
+
+    while True:
+        seen = await asyncio.to_thread(read_log, root, run, cursor, WAIT_PROGRESS_LINES)
+        for line in seen.lines:
+            message = summary.feed(line) or message
+        cursor = seen.next_line
+
+        remaining = deadline - loop.time()
+        if not seen.running or remaining <= 0:
+            break
+
+        if wanted:
+            wanted = await _notify(notify, cursor, message)
+        await asyncio.sleep(min(WAIT_POLL_INTERVAL, remaining))
+
+    # The caller asked for a window of its own; the one used for progress was
+    # a different, larger one.
+    return await asyncio.to_thread(read_log, root, run, since_line, max_lines)
 
 def format_status(status: RunStatus, tool: str = "run_status") -> str:
     """Render a RunStatus for an MCP tool result."""

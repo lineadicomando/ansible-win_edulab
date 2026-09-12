@@ -15,8 +15,8 @@ from adhoc import (
     secret_values,
     summarise,
 )
-from ansible_runner import build_playbook_command, run_command, run_raw, run_status, start_run
-from runlog import NotifyFn, format_status
+from ansible_runner import build_playbook_command, run_command, run_raw, run_status, start_run, wait_run
+from runlog import NotifyFn, done_path, format_status
 from inventory import list_inventories, load_inventory
 from preflight import preflight
 
@@ -241,6 +241,51 @@ def _get_tools() -> list[Tool]:
                 },
             },
         ),
+        Tool(
+            name="wait_run",
+            description=(
+                "Wait for a run started with background=true and return its output "
+                "once it ends. Prefer this over polling run_status in a loop: it "
+                "comes back the moment the run finishes, so a long run cannot be "
+                "started and then forgotten. If the wait runs out first, the result "
+                "is still marked running and says where to resume — call again to "
+                "keep waiting."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "run": {
+                        "type": "string",
+                        "description": (
+                            "Run id, as returned by a background run. "
+                            "'latest' (the default) is the most recent run."
+                        ),
+                        "default": "latest",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": (
+                            "Seconds to wait before returning with the run still "
+                            "going. Clamped to 5..3600."
+                        ),
+                        "default": 900,
+                    },
+                    "since_line": {
+                        "type": "integer",
+                        "description": (
+                            "Line to resume from: pass the since_line the previous "
+                            "call reported, to get only what is new."
+                        ),
+                        "default": 0,
+                    },
+                    "max_lines": {
+                        "type": "integer",
+                        "description": "Most lines to return in one call.",
+                        "default": 200,
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -330,7 +375,10 @@ async def _run_powershell(ctx: ServerRequestContext, arguments: dict) -> CallToo
             f"Started run {path.name} on {len(hosts)} "
             f"host{'s' if len(hosts) != 1 else ''}\n"
             f"[log] {path}\n\n"
-            f'Follow it with run_status(run="{path.name}", since_line=0).'
+            f'Wait for it with wait_run(run="{path.name}"), which returns when it ends, '
+            f'or read it as it goes with run_status(run="{path.name}", since_line=0).\n'
+            f"[done] {done_path(path)} appears when the run ends: "
+            f"a watcher outside this session can wait on that file."
         )
 
     result = await run_raw(cmd, label, _progress_notifier(ctx), timeout, ADHOC_ENV, redact)
@@ -376,7 +424,10 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
                 text=(
                     f"Started run {path.name}\n"
                     f"[log] {path}\n\n"
-                    f'Follow it with run_status(run="{path.name}", since_line=0).'
+                    f'Wait for it with wait_run(run="{path.name}"), which returns when it ends, '
+                    f'or read it as it goes with run_status(run="{path.name}", since_line=0).\n'
+                    f"[done] {done_path(path)} appears when the run ends: "
+                    f"a watcher outside this session can wait on that file."
                 ),
             )])
 
@@ -396,6 +447,22 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
         except FileNotFoundError as e:
             return CallToolResult(content=[TextContent(type="text", text=f"Error: {e}")])
         return CallToolResult(content=[TextContent(type="text", text=format_status(status))])
+
+    if name == "wait_run":
+        try:
+            status = await wait_run(
+                arguments.get("run", "latest"),
+                max(5.0, min(3600.0, float(arguments.get("timeout", 900)))),
+                int(arguments.get("since_line", 0)),
+                int(arguments.get("max_lines", 200)),
+                _progress_notifier(ctx),
+            )
+        except FileNotFoundError as e:
+            return CallToolResult(content=[TextContent(type="text", text=f"Error: {e}")])
+        # Still running means the wait expired, not that anything is wrong:
+        # point back at wait_run so the caller can simply wait again.
+        tool = "wait_run" if status.running else "run_status"
+        return CallToolResult(content=[TextContent(type="text", text=format_status(status, tool))])
 
     return CallToolResult(content=[TextContent(type="text", text=f"Unknown tool: {name}")])
 

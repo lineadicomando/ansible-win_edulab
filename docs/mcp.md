@@ -10,7 +10,8 @@ the collection to Claude Code. It lets you manage lab workstations in natural la
 Claude Code
     │  MCP (stdio)
     ▼
-mcp/server.py          ← MCP server: get_inventory, run_playbook, run_powershell, run_status
+mcp/server.py          ← MCP server: get_inventory, run_playbook, run_powershell,
+                                     run_status, wait_run
     ├── ansible_runner.py   ← builds and runs ansible-playbook subprocesses
     ├── adhoc.py            ← builds ad-hoc win_powershell runs, renders their results
     ├── preflight.py        ← checks inventory, vault and SSH keys before a run
@@ -258,7 +259,7 @@ keeps its secrets out of them, which a hand-typed `ansible -m win_shell` does no
 | `confirm` | bool | no | `false` | Required when the pattern selects more than 3 hosts |
 | `inventory` | string | no | `school` | Inventory name |
 | `timeout` | int | no | `300` | Seconds before the run is killed |
-| `background` | bool | no | `false` | Return a run id instead of waiting; follow with `run_status` |
+| `background` | bool | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
 Why this module rather than `win_shell`: it returns **objects**, not console text. The
 script can set `$Ansible.Result` to state its answer exactly, `$Ansible.Changed` to
@@ -370,6 +371,7 @@ of waiting for the tool call to return. The directory is gitignored.
 ```
 logs/
 ├── 20260910-095603-veyon-lab_ario_info.log
+├── 20260910-095603-veyon-lab_ario_info.log.done
 ├── 20260910-100112-win_wm-chrome-teacher.log
 └── latest.log -> 20260910-100112-win_wm-chrome-teacher.log
 ```
@@ -391,6 +393,40 @@ also appended to the tool result as `[log] …`, so the agent can point you at i
 
 Only the newest 50 logs are kept; older ones are dropped as new runs start.
 Set `ANSIBLE_MCP_LOG_DIR` to write them somewhere else.
+
+### Waiting for a background run
+
+`background=true` returns a run id straight away, which leaves someone with the job of
+noticing when the run ends. MCP has no way to interrupt a client later: a notification
+only exists while a request is in flight, so nothing the server sends after the call
+returns can wake an agent that has moved on. There are two ways to close that gap, and
+they are for two different waiters.
+
+**`wait_run`** — for the agent. It blocks until the run's log carries its end marker and
+then returns the output, so a background run cannot be started and forgotten. While it
+waits it keeps sending progress notifications, which is what stops a client from timing
+the call out mid-playbook.
+
+```json
+{ "run": "20260910-100112-win_wm-chrome-teacher.log", "timeout": 900 }
+```
+
+`timeout` (5..3600 seconds, default 900) bounds the wait, not the run: when it expires
+the result comes back still marked `running`, with the line to resume from. Call again
+to keep waiting. `run_status` remains the way to read a run *without* waiting for it.
+
+**`<log>.done`** — for everything else. When a run ends, its exit code is written to a
+sentinel file next to the log, after the log has been flushed: whoever the sentinel
+wakes finds the log complete. A shell, an editor or an agent harness can wait on one
+file instead of guessing at process state:
+
+```bash
+until [ -f logs/20260910-100112-win_wm-chrome-teacher.log.done ]; do sleep 5; done
+```
+
+Prefer this over watching for the `ansible-playbook` process: a `pgrep -f` pattern
+matches the watcher's own command line as well, so the loop never ends and the wait
+looks indistinguishable from a run that is still going.
 
 ### Why the output streams
 
@@ -492,6 +528,9 @@ command builders.
 - `run_logged(cmd, root, label, timeout=None)` — runs a command with its output written
   to `logs/<timestamp>-<label>.log` as it arrives, and `logs/latest.log` repointed at it;
   returns `(output, returncode, log_path, timed_out)`
+- `await_run(root, run, timeout, ...)` — polls a run's log until it ends, reporting
+  progress as it goes; behind the `wait_run` tool
+- `done_path(log_path)` — the `<log>.done` sentinel, written once the log is flushed
 
 ### `adhoc.py`
 
