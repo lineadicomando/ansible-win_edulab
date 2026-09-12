@@ -15,7 +15,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 | `run_playbook` | Standalone playbooks (veyon, seb_classroom, wol) |
 | `run_powershell` | One-off PowerShell on Windows hosts: diagnosis, inspection, a fix with no role behind it |
 | `run_status` | Read a run started with `background=true` without waiting for it |
-| `wait_run` | Wait for a background run to end and get its output: the right way to follow one to completion |
+| `wait_run` | Block until a background run ends and return its output — only when the next step depends on the result (see **Long runs**) |
 
 ### win-workman server
 
@@ -46,6 +46,31 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 **Rule**: always use `preview=true` before destructive operations (`-off`, `shutdown`, `logoff`, `lock`) or operations that require extra variables.
 
 **Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (e.g. `ario_info`, `ario_ling`, `spalla_info1`, `spalla_info2`, `spalla_ling`) to both `get_inventory` and `run_tasks`/`run_playbook`.
+
+---
+
+## Long runs: keep the chat free
+
+Anything longer than a few seconds — a package install, a whole-lab run, a pkg lifecycle
+test — runs with `background=true` **and** is then awaited from outside the turn, so the
+user can keep typing while it works.
+
+```
+1. run_tasks(..., background=true)          → returns the run id and its log path
+2. Bash, run_in_background:
+     until [ -f logs/<run>.log.done ]; do sleep 10; done
+3. the harness re-invokes on exit           → read the log, report the outcome
+```
+
+Every run writes `logs/<run>.log.done` once the log is flushed; the sentinel holds the
+exit code. That file is the only reliable signal — **never** wait on a `pgrep -f` of the
+ansible command line, because the watcher shell matches its own command line and the
+loop never exits.
+
+**`wait_run` blocks the turn.** Calling it straight after starting a background run is
+the same as running synchronously: `background=true` buys nothing and the chat stays
+busy until the run ends. Use it only when the very next action depends on the result and
+nothing else can usefully happen meanwhile. `run_status` reads a run *without* waiting.
 
 
 ---
