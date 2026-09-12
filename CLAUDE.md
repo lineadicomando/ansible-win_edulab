@@ -77,3 +77,15 @@ Agent instructions and directives for this project.
 - Subject line in the imperative mood, English: `Add the display_scale role for display scaling`
 - Body in English too, including the explanation of trade-offs and the reasoning behind the change
 - This applies to commit messages only — conversation, explanations, and answers to the user stay in Italian
+
+### 5. Keep one-off and site-specific playbooks in local/
+
+**Rule**: Playbooks written for a specific task, a single lab, or a local diagnosis go in `local/`, not in `playbooks/`. Only playbooks meant to be shared belong in `playbooks/`, which is tracked by git and published to GitHub.
+
+**Why**: `local/` is listed in `.gitignore`, so it is the place for anything site-specific: host names, lab-specific fixes, throwaway diagnostics. `playbooks/` is the public surface of the repo and should stay readable as a catalogue of reusable operations. Mixing the two pollutes the repository history with content that means nothing outside this installation.
+
+**How to apply**:
+- Before creating a playbook, ask whether it would make sense to someone with a different set of labs. If not, write it to `local/`
+- A diagnostic written to answer one question is a `local/` playbook, even when it is well written
+- Promote a playbook from `local/` to `playbooks/` only when it has been generalised: no hardcoded hosts, no site-specific paths, parameters exposed as variables
+- **Caveat**: the `run_playbook` MCP tool resolves names against `playbooks/` only (see `mcp/ansible_runner.py`). Playbooks in `local/` must be run with `ansible-playbook local/<name>.yaml` directly
