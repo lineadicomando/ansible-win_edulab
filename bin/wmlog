@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# wmlog — follow the log of a win-edulab MCP run and stop when the run ends.
+#
+# MCP runs started with background=true write to logs/<run>.log and create a
+# sibling logs/<run>.log.done sentinel on completion. A plain `tail -f` never
+# returns, so this wrapper watches the sentinel and exits on its own.
+#
+# Usage:
+#   wmlog                  follow the most recently started run
+#   wmlog <run>            follow a run by name, with or without the .log suffix
+#                          (a substring also works, if it matches one run)
+#   wmlog -l               list the ten most recent runs and their state
+#   wmlog -n <lines> ...   initial backlog to print (default: 50)
+#
+# Exits with the run's own exit code when the log records one, 0 otherwise.
+
+set -uo pipefail
+
+readonly PROG=${0##*/}
+LOGDIR=${WMLOG_DIR:-}
+BACKLOG=50
+
+die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 2; }
+
+usage() { sed -n '2,/^$/s/^# \?//p' "$0"; exit 0; }
+
+# The logs directory lives at the repository root, whatever the current dir.
+find_logdir() {
+    [[ -n $LOGDIR ]] && { [[ -d $LOGDIR ]] || die "no such directory: $LOGDIR"; return; }
+    local root
+    root=$(git rev-parse --show-toplevel 2>/dev/null) || root=
+    for d in ${root:+"$root/logs"} ./logs ../logs; do
+        [[ -d $d ]] && { LOGDIR=$d; return; }
+    done
+    die "logs/ not found — run from the project, or set WMLOG_DIR"
+}
+
+# Real run logs, newest first. logs/latest.log is a symlink to the current run:
+# its sentinel is named after the *target*, so following it as-is would wait for
+# a logs/latest.log.done that never appears. Keep it out, and canonicalize any
+# path the user hands us for the same reason.
+run_logs() {
+    ls -t -- "$LOGDIR"/*.log 2>/dev/null | grep -v '/latest\.log$'
+}
+
+canon() { readlink -f -- "$1"; }
+
+latest_log() {
+    local newest
+    newest=$(run_logs | head -1)
+    [[ -n $newest ]] || die "no runs in $LOGDIR"
+    canon "$newest"
+}
+
+# Accepts a full name, a name without .log, or any unambiguous substring.
+resolve_log() {
+    local want=$1 direct matches
+    for direct in "$LOGDIR/$want" "$LOGDIR/$want.log" "$want"; do
+        [[ -f $direct ]] && { canon "$direct"; return; }
+    done
+    mapfile -t matches < <(run_logs | grep -F -- "$want")
+    case ${#matches[@]} in
+        0) die "no run matching '$want' in $LOGDIR" ;;
+        1) canon "${matches[0]}" ;;
+        *) printf '%s: '\''%s'\'' matches %d runs:\n' "$PROG" "$want" "${#matches[@]}" >&2
+           printf '  %s\n' "${matches[@]##*/}" >&2
+           exit 2 ;;
+    esac
+}
+
+list_runs() {
+    local log state
+    while IFS= read -r log; do
+        [[ -f $log.done ]] && state=done || state='running'
+        printf '%-8s %s\n' "$state" "${log##*/}"
+    done < <(run_logs | head -10)
+}
+
+# A finished run records its status as a trailing "--- exit code N ---" line.
+run_exit_code() {
+    local code
+    code=$(grep -oE '^--- exit code [0-9]+ ---$' "$1" | tail -1 | grep -oE '[0-9]+')
+    printf '%s\n' "${code:-0}"
+}
+
+main() {
+    local do_list=0 target=
+    while (($#)); do
+        case $1 in
+            -l|--list) do_list=1; shift ;;
+            -n|--lines) [[ ${2-} ]] || die "-n needs a number"; BACKLOG=$2; shift 2 ;;
+            -h|--help) usage ;;
+            --) shift; break ;;
+            -*) die "unknown option: $1 (try --help)" ;;
+            *) target=$1; shift ;;
+        esac
+    done
+
+    find_logdir
+    ((do_list)) && { list_runs; return 0; }
+
+    local log
+    if [[ -n $target ]]; then log=$(resolve_log "$target"); else log=$(latest_log); fi
+
+    printf '==> %s\n' "$log" >&2
+    if [[ -f $log.done ]]; then
+        # Already finished: just print it, following would hang on nothing.
+        tail -n "$BACKLOG" -- "$log"
+        printf '==> run already finished\n' >&2
+    else
+        tail -n "$BACKLOG" -f -- "$log" &
+        local tail_pid=$!
+        while [[ ! -f $log.done ]] && kill -0 "$tail_pid" 2>/dev/null; do sleep 2; done
+        sleep 1  # let tail drain the last lines the run wrote
+        kill "$tail_pid" 2>/dev/null
+        wait "$tail_pid" 2>/dev/null
+        printf '==> run finished\n' >&2
+    fi
+    return "$(run_exit_code "$log")"
+}
+
+main "$@"
