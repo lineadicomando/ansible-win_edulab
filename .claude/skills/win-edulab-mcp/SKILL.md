@@ -14,7 +14,8 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 | `get_inventory` | Before any operation: discover hosts, groups, IP and MAC addresses |
 | `run_playbook` | Standalone playbooks (veyon, seb_classroom, wol) |
 | `run_powershell` | One-off PowerShell on Windows hosts: diagnosis, inspection, a fix with no role behind it |
-| `run_status` | Follow a run started with `background=true` |
+| `run_status` | Read a run started with `background=true` without waiting for it |
+| `wait_run` | Wait for a background run to end and get its output: the right way to follow one to completion |
 
 ### win-workman server
 
@@ -22,6 +23,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 |------|-------------|
 | `get_role_info` | When the role has custom actions or configurable defaults; returns display_name, custom_actions, defaults, notes |
 | `run_tasks` | Install/remove software, run operations on hosts/groups via the `lineadicomando.win_workman.win_workman` FQCN playbook |
+| `run_status`, `wait_run` | Same as on the win-edulab server, for runs started by `run_tasks` |
 
 ### samba-ad-dc server
 
