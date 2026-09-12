@@ -165,6 +165,7 @@ Probed values, not assumptions. `sidecar` = a digest file next to the installer.
 | Vendor / roles | Version source | sha256 without downloading |
 |---|---|---|
 | GitHub releases — `dbeaver`, `embarcadero_devcpp`, `git`, `laragon`, `netbeans`, `notepadpp`, `ntop`, `peazip`, `powertoys`, `rustdesk`, `seb`, `tinycad`, `veyon`, `windirstat`, `winfsp`, `winmerge` | `/releases/latest` or the API `tags` endpoint | **yes** — asset `digest` field in the API |
+| Visual Studio Code — `vscode` | `update.code.visualstudio.com/api/update/win32-x64/stable/latest` | **yes** — the same JSON carries `productVersion`, `url` and `sha256hash` |
 | Mozilla — `firefox` | `download-installer.cdn.mozilla.net/pub/firefox/releases/` | **yes** — `<version>/SHA256SUMS` (HTTP 200 confirmed) |
 | Python — `python31x` | `python.org/ftp/python/` directory listing | no sidecar (`.sha256` → 404); the release page publishes an md5, so download and hash |
 | Vivaldi | `vivaldi.com/download/` (page lists old versions too — filter) | no (`.sha256` and `.sha256sum` → 404) |
@@ -184,8 +185,8 @@ For an MSI where the bump also needs a new `ProductCode`, extract it with
   this file.
 - **Scraped version looks wrong** — download pages list archived releases; sorting the
   matches surfaced `5.6.2867.62` alongside `8.2.4133.52` for Vivaldi.
-- **Stale catalog doc** — easy to forget step 5. `adobe_reader_dc` and `vscode` are
-  already drifted this way in the repo.
+- **Stale catalog doc** — easy to forget step 5. `adobe_reader_dc` is still drifted
+  this way in the repo; `vscode` was, and was realigned when it was bumped to 1.137.0.
 - **`download` re-downloads every run afterwards** — the checksum does not match the
   file; re-hash rather than deleting the field.
 - **Templated URL roles** — editing the literal string does nothing when the URL is built
