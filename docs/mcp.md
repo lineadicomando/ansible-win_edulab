@@ -10,8 +10,10 @@ the collection to Claude Code. It lets you manage lab workstations in natural la
 Claude Code
     │  MCP (stdio)
     ▼
-mcp/server.py          ← MCP server, exposes get_inventory and run_playbook
+mcp/server.py          ← MCP server: get_inventory, run_playbook, run_powershell, run_status
     ├── ansible_runner.py   ← builds and runs ansible-playbook subprocesses
+    ├── adhoc.py            ← builds ad-hoc win_powershell runs, renders their results
+    ├── preflight.py        ← checks inventory, vault and SSH keys before a run
     ├── runlog.py           ← streams each run to a log file under logs/
     └── inventory.py        ← parses hosts.yaml files, lists available roles
          │
@@ -236,6 +238,56 @@ the `win_workman` role (e.g. `veyon`, `wol`, `seb_classroom`, `autologon`).
 
 ---
 
+### `run_powershell`
+
+Runs a PowerShell script on Windows hosts through `ansible.windows.win_powershell`,
+using the inventory's addresses, vault credentials and SSH arguments. This is the
+supported way to run a one-off command on a lab PC: it keeps the run in `logs/` and
+keeps its secrets out of them, which a hand-typed `ansible -m win_shell` does not.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `script` | string | yes | — | The PowerShell script |
+| `l` | string | yes | — | Host, group or comma-separated pattern; no default by design |
+| `parameters` | object | no | `{}` | Values for the script's `param()` block, passed typed |
+| `sensitive_parameters` | array | no | `[]` | `{name, value}` or `{name, username, password}`, passed as SecureString/PSCredential and redacted from the log |
+| `read_only` | bool | no | `true` | Appends `$Ansible.Changed = $false` so a query is not reported as a change |
+| `depth` | int | no | `3` | Serialisation depth of returned objects |
+| `error_action` | string | no | `stop` | `$ErrorActionPreference`: `stop`, `continue`, `silently_continue` |
+| `chdir` | string | no | — | PowerShell location to set first |
+| `confirm` | bool | no | `false` | Required when the pattern selects more than 3 hosts |
+| `inventory` | string | no | `school` | Inventory name |
+| `timeout` | int | no | `300` | Seconds before the run is killed |
+| `background` | bool | no | `false` | Return a run id instead of waiting; follow with `run_status` |
+
+Why this module rather than `win_shell`: it returns **objects**, not console text. The
+script can set `$Ansible.Result` to state its answer exactly, `$Ansible.Changed` to
+report honestly whether it changed anything, and error records come back with their
+exception details instead of being guessed from an exit code.
+
+```json
+{ "script": "Get-Service -Name Veyon* | Select-Object Name, Status", "l": "teacher" }
+{ "script": "param([String]$Path)\nTest-Path $Path", "l": "students",
+  "parameters": { "Path": "C:\\Program Files\\Veyon" }, "confirm": true }
+```
+
+Two constraints worth knowing before writing a script:
+
+- it runs in **Windows PowerShell 5.1**, not pwsh 7 — no ternary operator, no
+  `ConvertFrom-Json -AsHashtable`, no `Get-Error`;
+- serialised objects are open-ended in size, so project them with `Select-Object`.
+  Output past 4 KB per host, or 24 KB in total, is truncated with a note.
+
+Results from hosts that answered identically are folded into a single entry, so a lab
+of 25 PCs reads as a few lines instead of 25 JSON blobs.
+
+Before running, the tool checks the inventory exists, that its vault is initialised and
+its vault password file present, and that the SSH keys its `group_vars` reference are
+readable — and refuses with that list rather than letting it surface as a connection
+error per host.
+
+---
+
 ### `samba`
 
 Manages the Samba AD Domain Controller via `samba-tool`, through the
@@ -414,8 +466,10 @@ switch to an absolute path:
 
 ```
 mcp/
-├── server.py           # MCP entry point — declares and dispatches get_inventory, run_playbook
+├── server.py           # MCP entry point — declares and dispatches the tools
 ├── ansible_runner.py   # Builds ansible-playbook command lists, runs subprocesses
+├── adhoc.py            # Ad-hoc win_powershell command lines, host counting, result rendering
+├── preflight.py        # Inventory, vault and SSH key checks run before a command
 ├── inventory.py        # Parses hosts.yaml, lists inventories and installed roles
 ├── runlog.py           # Per-run log files under logs/, written while the playbook runs
 └── pyproject.toml      # Package metadata and dependencies (mcp>=1.0, pyyaml>=6.0)
@@ -426,6 +480,8 @@ mcp/
 - `build_playbook_command(playbook, l, e, inventory)` — builds a playbook command list
 - `run_command(cmd, label)` — runs the command, tees its output to `logs/` line by line,
   returns the combined stdout/stderr plus the log path
+- `run_raw(cmd, label, notify, timeout, env, redact)` — the same, returning the
+  `RunResult` for a caller that renders the output itself
 
 The `run_tasks` and `samba` tools documented above belong to the `win-workman` and
 `samba-ad-dc` MCP servers, which live in their own collections and keep their own
@@ -436,6 +492,24 @@ command builders.
 - `run_logged(cmd, root, label, timeout=None)` — runs a command with its output written
   to `logs/<timestamp>-<label>.log` as it arrives, and `logs/latest.log` repointed at it;
   returns `(output, returncode, log_path, timed_out)`
+
+### `adhoc.py`
+
+- `build_powershell_command(script, l, inventory, ...)` — an `ansible -m win_powershell`
+  command list; module arguments are passed as JSON, so a script survives quotes, `$`
+  and newlines intact, and a script containing Jinja delimiters is wrapped in
+  `{% raw %}`
+- `resolve_hosts(l, inventory)` — the hosts a pattern selects, for sizing a command
+  before running it; exclusions are ignored, so the count errs high
+- `secret_values(sensitive_parameters)` — the values the run must keep out of its log
+- `summarise(text)` — folds ad-hoc output into per-host blocks, collapsing hosts that
+  answered alike
+
+### `preflight.py`
+
+- `preflight(inventory)` — what is missing before a run can work: unknown inventory,
+  absent `hosts.yaml`, an uninitialised vault, a missing vault password file, an SSH
+  key referenced by `group_vars` that does not exist. An empty list means ready
 
 ### `inventory.py`
 

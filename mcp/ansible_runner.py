@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from runlog import NotifyFn, RunStatus, read_log, run_logged_async, start_logged
+from runlog import NotifyFn, RunResult, RunStatus, read_log, run_logged_async, start_logged
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -22,22 +22,41 @@ def build_playbook_command(
     return cmd
 
 
+async def run_raw(
+    cmd: list[str],
+    label: str = "run",
+    notify: NotifyFn | None = None,
+    timeout: int | None = None,
+    env: dict[str, str] | None = None,
+    redact: list[str] | None = None,
+) -> RunResult:
+    """Run an ansible command, streaming its output to a log file."""
+    return await run_logged_async(cmd, PROJECT_ROOT, label, notify, timeout, env, redact)
+
+
 async def run_command(
     cmd: list[str],
     label: str = "run",
     notify: NotifyFn | None = None,
+    timeout: int | None = None,
+    env: dict[str, str] | None = None,
 ) -> str:
-    """Run an ansible-playbook command, streaming its output to a log file."""
-    result = await run_logged_async(cmd, PROJECT_ROOT, label, notify)
+    """run_raw, rendered for a tool result: output, exit code, log path."""
+    result = await run_raw(cmd, label, notify, timeout, env)
     output = result.output
     if result.returncode != 0:
         output += f"\n[exit code {result.returncode}]"
     return f"{output}\n[log] {result.log_path}"
 
 
-def start_run(cmd: list[str], label: str = "run") -> Path:
-    """Start an ansible-playbook command in the background; return its log path."""
-    return start_logged(cmd, PROJECT_ROOT, label)
+def start_run(
+    cmd: list[str],
+    label: str = "run",
+    env: dict[str, str] | None = None,
+    redact: list[str] | None = None,
+) -> Path:
+    """Start an ansible command in the background; return its log path."""
+    return start_logged(cmd, PROJECT_ROOT, label, env=env, redact=redact)
 
 
 def run_status(run: str = "latest", since_line: int = 0, max_lines: int = 200) -> RunStatus:

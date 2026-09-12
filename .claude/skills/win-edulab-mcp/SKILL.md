@@ -1,6 +1,6 @@
 ---
 name: win-edulab-mcp
-description: Use when operating the win-edulab MCP server — running tasks or playbooks on lab hosts, discovering inventory, querying role capabilities, and composing multi-role operations via run_tasks or run_playbook.
+description: Use when operating the win-edulab MCP server — running tasks or playbooks on lab hosts, running one-off PowerShell through run_powershell, discovering inventory, querying role capabilities, and composing multi-role operations via run_tasks or run_playbook.
 ---
 
 # win-edulab MCP — Operational Guide
@@ -13,6 +13,8 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 |------|-------------|
 | `get_inventory` | Before any operation: discover hosts, groups, IP and MAC addresses |
 | `run_playbook` | Standalone playbooks (veyon, seb_classroom, wol) |
+| `run_powershell` | One-off PowerShell on Windows hosts: diagnosis, inspection, a fix with no role behind it |
+| `run_status` | Follow a run started with `background=true` |
 
 ### win-workman server
 
@@ -42,6 +44,73 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 **Rule**: always use `preview=true` before destructive operations (`-off`, `shutdown`, `logoff`, `lock`) or operations that require extra variables.
 
 **Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (e.g. `ario_info`, `ario_ling`, `spalla_info1`, `spalla_info2`, `spalla_ling`) to both `get_inventory` and `run_tasks`/`run_playbook`.
+
+
+---
+
+## run_powershell — one-off PowerShell
+
+Runs a script through `ansible.windows.win_powershell`, inheriting the inventory's
+addresses, vault credentials and SSH arguments. **Never** drop to `ansible -m win_shell`
+in a terminal instead: the MCP call is what puts the run in `logs/` and redacts its
+secrets.
+
+### When to use it, and when not to
+
+| Situation | Tool |
+|-----------|------|
+| "Is the Veyon service running on PC07?" | `run_powershell` |
+| "Why did the Chrome install fail here?" | `run_powershell` |
+| Anything the catalog already covers | `run_tasks` |
+| A sequence worth repeating, or one needing idempotency | a playbook in `local/`, or a new role |
+
+A script that gets written twice is a role that is missing. See **win-workman-new-role**.
+
+### What comes back
+
+Objects, not console text. Either leave them on the success stream, or set
+`$Ansible.Result` to say exactly what the answer is:
+
+```json
+{ "script": "$Ansible.Result = @{ Version = (Get-Item 'C:\\Program Files\\Veyon\\veyon-master.exe').VersionInfo.FileVersion }", "l": "teacher" }
+```
+
+Other `$Ansible` members: `Changed`, `Failed`, `Tmpdir`, `Diff`.
+
+### The rules that save a round trip
+
+- **Windows PowerShell 5.1**, not pwsh 7: no ternary operator, no
+  `ConvertFrom-Json -AsHashtable`, no `Get-Error`.
+- **Project with `Select-Object`** before returning: a bare `Get-Process` serialises
+  megabytes and gets truncated. `depth` defaults to 3; raising it grows output fast.
+- **Values go in `parameters`**, into a `param()` block — not built into the script text.
+  No quoting, no injection.
+- **Secrets go in `sensitive_parameters`** (`{name, value}` or `{name, username,
+  password}`): passed as SecureString/PSCredential and kept out of the log.
+- `read_only` defaults to true and appends `$Ansible.Changed = $false`. Set it to
+  **false** for a script that modifies the host, or the run reports a lie.
+- `error_action` defaults to `stop`: an error record fails the task instead of
+  passing unnoticed.
+- `l` is **required** and has no default. More than 3 hosts needs `confirm=true`.
+- Windows hosts only; the Linux DC is the samba-ad-dc server's job.
+
+### Examples
+
+```json
+{ "script": "Get-Service -Name Veyon* | Select-Object Name, Status, StartType", "l": "teacher" }
+```
+
+```json
+{ "script": "param([String]$Path)\nGet-ChildItem $Path | Select-Object -First 5 Name, Length",
+  "l": "students", "parameters": { "Path": "C:\\Windows\\Temp" }, "confirm": true }
+```
+
+```json
+{ "script": "Restart-Service -Name VeyonService", "l": "PC07", "read_only": false }
+```
+
+Hosts that answer alike are folded into one entry, so a whole lab reads as a few lines
+rather than one JSON blob per PC.
 
 ---
 
