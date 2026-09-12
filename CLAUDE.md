@@ -27,6 +27,19 @@ Agent instructions and directives for this project.
 - If an MCP call fails, treat it as a real issue to diagnose—do not fall back to direct file reads as a workaround
 - Each successful MCP call verifies that the service, credentials, and configuration are working correctly
 
+### 1c. Run long operations in the background, leave the chat free
+
+**Rule**: Any run longer than a few seconds — a package install, a whole-lab run, a pkg lifecycle test — is started with `background=true` and awaited from *outside* the turn, on the `logs/<run>.log.done` sentinel. Never call `wait_run` straight after starting the run.
+
+**Why**: `wait_run` blocks the turn, so a background run followed immediately by `wait_run` behaves exactly like a synchronous one and the chat stays busy for the whole install. Waiting on the sentinel from a backgrounded Bash command lets the harness re-invoke when the run ends, so the user keeps the chat meanwhile.
+
+**How to apply**:
+- Start with `run_tasks(..., background=true)`, note the returned log name
+- Then, Bash with `run_in_background`: `until [ -f logs/<run>.log.done ]; do sleep 10; done`
+- Report the outcome when re-invoked; never watch with `pgrep -f`, which matches the watcher's own command line and never exits
+- `wait_run` inline only when the very next step depends on the result; `run_status` reads a run without waiting
+- Details and examples: skill `win-edulab-mcp`, section **Long runs**
+
 ### 2. Detect and handle missing essential configuration
 
 **Rule**: Before attempting to execute MCP tasks, proactively detect missing essential configuration (inventories, encrypted vaults, SSH keys) and signal the issue clearly to the user.
