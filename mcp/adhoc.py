@@ -61,11 +61,11 @@ def build_powershell_command(
         "error_action": error_action,
     }
     if parameters:
-        args["parameters"] = parameters
+        args["parameters"] = _protect_values(parameters)
     if sensitive_parameters:
-        args["sensitive_parameters"] = sensitive_parameters
+        args["sensitive_parameters"] = _protect_values(sensitive_parameters)
     if chdir:
-        args["chdir"] = chdir
+        args["chdir"] = _protect_templating(chdir)
 
     return [
         "ansible",
@@ -77,15 +77,43 @@ def build_powershell_command(
     ]
 
 
-def _protect_templating(script: str) -> str:
-    """Keep Jinja out of a script that happens to contain its delimiters.
+# A raw block ends at the first endraw tag and treats the rest as literal
+# text, nested raw tags included. A literal endraw is the one sequence that
+# can break out of it, in any of its whitespace-control spellings.
+_ENDRAW_RE = re.compile(r"\{%[-+]?\s*endraw\s*[-+]?%\}")
+
+
+def _protect_templating(value: str) -> str:
+    """Keep Jinja out of a string that happens to contain its delimiters.
 
     Module arguments are templated before they reach the host, so a literal
     {{ or {% in PowerShell would be eaten on the way.
     """
-    if "{{" in script or "{%" in script:
-        return "{% raw %}" + script + "{% endraw %}"
-    return script
+    if "{{" not in value and "{%" not in value:
+        return value
+
+    # Each endraw the value carries is handed back as an expression, outside
+    # the raw block it would otherwise have closed.
+    parts = _ENDRAW_RE.split(value)
+    protected = "{% raw %}" + parts[0]
+    for tag, part in zip(_ENDRAW_RE.findall(value), parts[1:]):
+        protected += "{% endraw %}{{ '" + tag + "' }}{% raw %}" + part
+    return protected + "{% endraw %}"
+
+
+def _protect_values(value):
+    """_protect_templating over a structure of module arguments.
+
+    Values are templated just as the script is, so a path or a password that
+    happens to contain braces has to be protected the same way.
+    """
+    if isinstance(value, str):
+        return _protect_templating(value)
+    if isinstance(value, dict):
+        return {key: _protect_values(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_protect_values(item) for item in value]
+    return value
 
 
 def secret_values(sensitive_parameters: list | None) -> list[str]:
