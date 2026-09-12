@@ -47,6 +47,20 @@ class RunResult(NamedTuple):
     timed_out: bool
 
 
+def _redactor(redact: list[str] | None) -> Callable[[str], str]:
+    """Replace known secret values wherever they appear on their way out."""
+    values = sorted((value for value in (redact or []) if value), key=len, reverse=True)
+    if not values:
+        return lambda text: text
+
+    def hide(text: str) -> str:
+        for value in values:
+            text = text.replace(value, "********")
+        return text
+
+    return hide
+
+
 def _slug(label: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", label).strip("_")[:60] or "run"
 
@@ -148,6 +162,8 @@ def run_logged(
     timeout: int | None = None,
     on_line: Callable[[str], None] | None = None,
     path: Path | None = None,
+    env: dict[str, str] | None = None,
+    redact: list[str] | None = None,
 ) -> RunResult:
     """Run cmd, tee its output to a per-run log file, and return the result.
 
@@ -158,12 +174,15 @@ def run_logged(
     if path is None:
         path = new_log_path(root, label)
 
+    hide = _redactor(redact)
     chunks: list[str] = []
     killed = threading.Event()
     timer: threading.Timer | None = None
 
     with path.open("w", encoding="utf-8", errors="replace") as log:
-        log.write(f"$ {shlex.join(cmd)}\n\n")
+        # The command line goes in the log so a run can be reproduced by hand;
+        # a secret passed on it must not go with it.
+        log.write(f"$ {hide(shlex.join(cmd))}\n\n")
         log.flush()
         _point_latest_at(path)
 
@@ -178,7 +197,7 @@ def run_logged(
                 # Ansible leaves flushing to the system (see Display.display),
                 # so over a pipe its output would only reach us in blocks:
                 # unbuffer it.
-                env=dict(os.environ, PYTHONUNBUFFERED="1"),
+                env=dict(os.environ, PYTHONUNBUFFERED="1", **(env or {})),
                 # The MCP server's own stdin is the JSON-RPC stream: never hand
                 # it to a playbook that decides to prompt.
                 stdin=subprocess.DEVNULL,
@@ -198,6 +217,7 @@ def run_logged(
                 timer.start()
 
             for line in proc.stdout:
+                line = hide(line)
                 log.write(line)
                 log.flush()
                 chunks.append(line)
@@ -273,10 +293,14 @@ async def run_logged_async(
     label: str,
     notify: NotifyFn | None = None,
     timeout: int | None = None,
+    env: dict[str, str] | None = None,
+    redact: list[str] | None = None,
 ) -> RunResult:
     """run_logged in a worker thread, reporting progress through notify."""
     if notify is None:
-        return await asyncio.to_thread(run_logged, cmd, root, label, timeout)
+        return await asyncio.to_thread(
+            run_logged, cmd, root, label, timeout, env=env, redact=redact
+        )
 
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -288,7 +312,9 @@ async def run_logged_async(
 
     pump = asyncio.create_task(_pump(queue, notify))
     try:
-        return await asyncio.to_thread(run_logged, cmd, root, label, timeout, on_line)
+        return await asyncio.to_thread(
+            run_logged, cmd, root, label, timeout, on_line, env=env, redact=redact
+        )
     finally:
         queue.put_nowait(None)
         await pump
@@ -308,7 +334,14 @@ class RunStatus(NamedTuple):
     total_lines: int
 
 
-def start_logged(cmd: list[str], root: Path, label: str, timeout: int | None = None) -> Path:
+def start_logged(
+    cmd: list[str],
+    root: Path,
+    label: str,
+    timeout: int | None = None,
+    env: dict[str, str] | None = None,
+    redact: list[str] | None = None,
+) -> Path:
     """Start cmd in the background and return its log path straight away.
 
     The caller polls the log through read_log instead of waiting. The worker is
@@ -319,7 +352,7 @@ def start_logged(cmd: list[str], root: Path, label: str, timeout: int | None = N
 
     def work() -> None:
         try:
-            run_logged(cmd, root, label, timeout, path=path)
+            run_logged(cmd, root, label, timeout, path=path, env=env, redact=redact)
         except Exception:
             logger.exception("background run failed: %s", path.name)
 

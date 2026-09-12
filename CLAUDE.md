@@ -12,6 +12,7 @@ Agent instructions and directives for this project.
 
 **How to apply**:
 - To execute tasks on Ansible hosts: use the `run_tasks` tool from the `win-workman` MCP server
+- To run a one-off PowerShell command on a Windows host: use the `run_powershell` tool from the `win-edulab` MCP server, never `ansible -m win_shell` in a terminal. The tool inherits the inventory's credentials, records the run under `logs/`, and keeps secrets passed as `sensitive_parameters` out of that record
 - Before executing a task, call `get_role_info` if you're unsure which actions are available
 - Execute Ansible commands directly via shell only when the task is not available through the configured MCP services
 

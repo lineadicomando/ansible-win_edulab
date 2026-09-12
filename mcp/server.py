@@ -7,9 +7,18 @@ from mcp.server.context import ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool, CallToolResult, ListToolsResult, PaginatedRequestParams, CallToolRequestParams
 
-from ansible_runner import build_playbook_command, run_command, run_status, start_run
+from adhoc import (
+    CONFIRM_ABOVE,
+    ENV as ADHOC_ENV,
+    build_powershell_command,
+    resolve_hosts,
+    secret_values,
+    summarise,
+)
+from ansible_runner import build_playbook_command, run_command, run_raw, run_status, start_run
 from runlog import NotifyFn, format_status
 from inventory import list_inventories, load_inventory
+from preflight import preflight
 
 app = Server("win-edulab")
 
@@ -85,6 +94,120 @@ def _get_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="run_powershell",
+            description=(
+                "Run a PowerShell script on lab hosts through ansible.windows.win_powershell, "
+                "using the inventory's addresses, credentials and SSH settings. "
+                "Use this for one-off queries and fixes; anything worth repeating belongs in a "
+                "playbook or a win_workman role instead.\n"
+                "The script's objects come back structured, not as console text: set "
+                "$Ansible.Result to return exactly what you want, or just leave objects on the "
+                "success stream. Other $Ansible members: Changed, Failed, Tmpdir, Diff.\n"
+                "Notes that save a round trip:\n"
+                "- The script runs in Windows PowerShell 5.1, not pwsh 7: no ternary operator, "
+                "no ConvertFrom-Json -AsHashtable, no Get-Error.\n"
+                "- Project objects with Select-Object before returning them; a bare Get-Process "
+                "serialises megabytes and gets truncated.\n"
+                "- Pass values through 'parameters' into a param() block rather than building "
+                "them into the script text, and secrets through 'sensitive_parameters'; the "
+                "script text itself is written to the run log.\n"
+                "- Windows hosts only. The Linux DC is served by the samba-ad-dc MCP server."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "script": {
+                        "type": "string",
+                        "description": (
+                            "The PowerShell script. Start it with a param() block when using "
+                            "'parameters'."
+                        ),
+                    },
+                    "l": {
+                        "type": "string",
+                        "description": (
+                            "Ansible pattern: a hostname, a group, or a comma-separated list. "
+                            "Required, and deliberately without a default: call get_inventory "
+                            "if unsure what exists."
+                        ),
+                    },
+                    "parameters": {
+                        "type": "object",
+                        "description": (
+                            "Values for the script's param() block, passed typed rather than "
+                            "interpolated. E.g. {\"Path\": \"C:\\\\temp\", \"Force\": true}"
+                        ),
+                        "default": {},
+                    },
+                    "sensitive_parameters": {
+                        "type": "array",
+                        "description": (
+                            "Parameters passed as SecureString or PSCredential and kept out of "
+                            "the logs. Each entry is {name, value} or {name, username, password}."
+                        ),
+                        "items": {"type": "object"},
+                        "default": [],
+                    },
+                    "read_only": {
+                        "type": "boolean",
+                        "description": (
+                            "True (the default) appends $Ansible.Changed = $false, so a query "
+                            "does not report itself as a change. Set it to false for a script "
+                            "that modifies the host."
+                        ),
+                        "default": True,
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": (
+                            "How deep returned objects are serialised. Raising it past 3 grows "
+                            "the output fast; prefer Select-Object."
+                        ),
+                        "default": 3,
+                    },
+                    "error_action": {
+                        "type": "string",
+                        "enum": ["stop", "continue", "silently_continue"],
+                        "description": (
+                            "$ErrorActionPreference. 'stop' (the default) turns an error record "
+                            "into a failed task instead of letting the script carry on."
+                        ),
+                        "default": "stop",
+                    },
+                    "chdir": {
+                        "type": "string",
+                        "description": "PowerShell location to set before running the script.",
+                    },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": (
+                            f"Required to be true when the pattern selects more than "
+                            f"{CONFIRM_ABOVE} hosts."
+                        ),
+                        "default": False,
+                    },
+                    "inventory": {
+                        "type": "string",
+                        "default": "school",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Seconds before the run is killed.",
+                        "default": 300,
+                    },
+                    "background": {
+                        "type": "boolean",
+                        "description": (
+                            "Start the run and return its id instead of waiting, then follow it "
+                            "with run_status. The output is the raw one, not the summary."
+                        ),
+                        "default": False,
+                    },
+                },
+                "required": ["script", "l"],
+            },
+        ),
+        Tool(
             name="run_status",
             description=(
                 "Read the log of a run started with background=true: the new output "
@@ -142,6 +265,83 @@ def _progress_notifier(ctx: ServerRequestContext) -> NotifyFn | None:
     return notify
 
 
+def _missing_config(inventory: str) -> str | None:
+    """The tool result to return when the inventory is not ready, if it isn't."""
+    problems = preflight(inventory)
+    if not problems:
+        return None
+    return (
+        f"Configuration missing for inventory {inventory!r}:\n"
+        + "\n".join(f"- {problem}" for problem in problems)
+        + "\n\nFix it before running, or say how you want to proceed. "
+        "The ansible-vault-secrets, win-edulab-vault and win-edulab-inventory "
+        "skills cover these."
+    )
+
+
+async def _run_powershell(ctx: ServerRequestContext, arguments: dict) -> CallToolResult:
+    def fail(text: str) -> CallToolResult:
+        return CallToolResult(content=[TextContent(type="text", text=text)])
+
+    script: str = arguments.get("script") or ""
+    l: str = arguments.get("l") or ""
+    if not script.strip():
+        return fail("Error: script is required")
+    if not l.strip():
+        return fail("Error: l is required: name the host or group to run on")
+
+    inventory: str = arguments.get("inventory", "school")
+    missing = _missing_config(inventory)
+    if missing:
+        return fail(missing)
+
+    hosts = resolve_hosts(l, inventory)
+    if not hosts:
+        return fail(
+            f"Pattern {l!r} matches no host in inventory {inventory!r}. "
+            f"Call get_inventory to see the host and group names."
+        )
+    if len(hosts) > CONFIRM_ABOVE and not arguments.get("confirm", False):
+        return fail(
+            f"Pattern {l!r} selects {len(hosts)} hosts: "
+            f"{', '.join(hosts)}.\n"
+            f"Repeat the call with confirm=true if that is the intent."
+        )
+
+    sensitive = arguments.get("sensitive_parameters") or None
+    cmd = build_powershell_command(
+        script,
+        l,
+        inventory,
+        parameters=arguments.get("parameters") or None,
+        sensitive_parameters=sensitive,
+        depth=int(arguments.get("depth", 3)),
+        error_action=arguments.get("error_action", "stop"),
+        read_only=arguments.get("read_only", True),
+        chdir=arguments.get("chdir"),
+    )
+    label = f"ps-{l}"
+    timeout = int(arguments.get("timeout", 300))
+    redact = secret_values(sensitive)
+
+    if arguments.get("background", False):
+        path = start_run(cmd, label, env=ADHOC_ENV, redact=redact)
+        return fail(
+            f"Started run {path.name} on {len(hosts)} "
+            f"host{'s' if len(hosts) != 1 else ''}\n"
+            f"[log] {path}\n\n"
+            f'Follow it with run_status(run="{path.name}", since_line=0).'
+        )
+
+    result = await run_raw(cmd, label, _progress_notifier(ctx), timeout, ADHOC_ENV, redact)
+    text = summarise(result.output)
+    if result.timed_out:
+        text += f"\n[timed out after {timeout}s]"
+    elif result.returncode != 0 and not text:
+        text += f"\n[exit code {result.returncode}]"
+    return fail(f"{text}\n\n[log] {result.log_path}")
+
+
 async def handle_list_tools(ctx: ServerRequestContext, params: PaginatedRequestParams) -> ListToolsResult:
     return ListToolsResult(tools=_get_tools())
 
@@ -182,6 +382,9 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
 
         output = await run_command(cmd, label, _progress_notifier(ctx))
         return CallToolResult(content=[TextContent(type="text", text=output)])
+
+    if name == "run_powershell":
+        return await _run_powershell(ctx, arguments)
 
     if name == "run_status":
         try:
