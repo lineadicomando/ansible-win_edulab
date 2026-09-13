@@ -26,7 +26,7 @@ The entry point for standard workflows is `pkg_workflow`, which internally route
 | `win_workman_mode_force_logoff` | `true` | Force logoff on lock |
 | `win_workman_restart_timeout` | `600` | Seconds to wait for reboot |
 | `win_workman_restart` | `true` | Whether reboots are allowed |
-| `win_workman_cleanup_uninstaller_dir` | `true` | After a successful uninstall, remove the install directory when only the uninstaller's own files are left — Inno Setup cannot delete the running `unins000.exe` |
+| `win_workman_cleanup_uninstaller_dir` | `true` | After a successful uninstall, remove the install directory when only the uninstaller's own files are left — Inno Setup cannot delete the running `unins000.exe`. Applies to every package role, and only fires once the detect reports the package gone |
 
 Override these in inventory `group_vars` or play `vars`.
 
@@ -82,7 +82,17 @@ Key facts set: `win_workman_operation`, `win_workman_needs_action`, `win_workman
 
 Detects presence, runs `before_uninstall_ps_script`, calls `win_package` with `state: absent` (or the PowerShell helper if `uninstall_via_helper: true`), removes cleanup_paths, removes shortcuts, removes PATH entries.
 
-When `uninstall_via_helper: true`, the uninstall string is read from the registry, parsed (handles both `"path" inline-args` and `MsiExec.exe args` formats), and executed via `Start-Process`. Use `uninstall_valid_rc` in the schema to declare which exit codes are treated as success (default `[0]`).
+When `uninstall_via_helper: true`, the uninstall string is read from the registry, parsed (handles both `"path" inline-args` and `MsiExec.exe args` formats), and executed via `Start-Process -Wait`. Use `uninstall_valid_rc` in the schema to declare which exit codes are treated as success (default `[0]`). **NSIS installers require this flag** — `win_package` returns as soon as `Uninstall.exe` relaunches itself from `%TEMP%`, so the uninstall is reported done while it is still running.
+
+Order of the cleanup tail, which matters because each step reads the one before:
+
+1. `Detect software after uninstall task` — refreshes `win_workman_detect_sw`
+2. `Cleanup registry key` — only when `cleanup_registry_key: true` and the entry survived
+3. `Detect software after registry key cleanup` — re-runs the detect, but only when step 2 actually changed something
+4. `Cleanup paths` — guarded by `win_workman_detect_sw.result.id is none`
+5. `Cleanup uninstaller leftovers` — guarded by `not …result.installed`
+
+Step 3 exists because steps 4 and 5 decide from the detect whether the package is really gone, and step 2 invalidates it. Without the refresh both are skipped exactly when the uninstaller keeps its own registry key — which is the case `cleanup_registry_key` is for.
 
 ```yaml
 - ansible.builtin.include_role:

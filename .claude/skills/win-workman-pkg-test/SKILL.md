@@ -29,6 +29,13 @@ assuming a naming scheme. After revert the VM is powered off.
 VM is simply powered off and you do not want to discard its current state; `snapshot-revert`
 throws away everything since the snapshot.
 
+**Three Windows VMs carry a `baseline` snapshot:** `teacher`, `student01` and `student02`.
+Revert, wake and test all three in one go when a change touches shared code — one VM for
+the branch you modified, the others for regression on roles that must be unaffected. Pass
+them together (`"vm":["teacher","student01","student02"]`, then `-l teacher,student01,student02`
+for `wol` and `secure_ssh`) and start one `run_tasks` per VM in the background so the
+lifecycles run in parallel.
+
 ### 2. Power on (Wake-on-LAN)
 
 ```bash
@@ -109,6 +116,12 @@ under test.
 | 8 | `chrome-off` | Uninstalls; `changed=true` |
 | 9 | `chrome-is_present` | **Fails** (expected — software is absent) |
 | 10 | `chrome-info` | Reports absent; no changes |
+| 11 | *(check the target filesystem)* | Install dir, registry key, shortcuts and Start Menu folder really gone |
+
+> **Step 11 is not optional.** `info` reads the uninstall registry entry, and a role
+> with `cleanup_registry_key: true` deletes that entry whether or not the uninstall
+> finished. `embarcadero_devcpp` passed steps 9 and 10 while leaving 5862 files
+> (406 MB) on disk. Verify with `run_powershell`, not with `info`.
 
 ### Example commands (chrome)
 
@@ -178,7 +191,7 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
 | `on` | Software installed; registry entry present; shortcuts created if defined |
 | `on` (repeat) | `changed=false`; version not downgraded |
 | `is_present` | Play continues if installed; fails with clear message if absent |
-| `off` | Software removed; cleanup_paths removed; shortcuts removed |
+| `off` | Software removed; cleanup_paths removed; shortcuts removed. Confirm on the filesystem — `info` alone can report absent while the install tree survives |
 
 ---
 
@@ -188,6 +201,18 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
   in the schema; the registry detection may not match the installed entry.
 - **`off` does not remove the package** — verify `uninstall_product_id` or
   `uninstall_display_name` in the schema matches the actual registry value (use `info` to read it).
+- **`off` reports `changed=true` but the files are still there** — the installer is
+  NSIS. Its `Uninstall.exe` relaunches itself from `%TEMP%` and exits rc 0 at once, so
+  `win_package` calls it done and the detached child dies with the Ansible session.
+  Set `uninstall_via_helper: true` in the schema, as every NSIS role in the collection
+  does. Identify the engine without installing: grep the cached installer under
+  `win_workman_storage_path` for `Nullsoft` (NSIS) or `Inno Setup` (not affected).
+  The helper was enough for `dbeaver`, `embarcadero_devcpp` and `orwell_devcpp`, verified
+  on disk. It is not enough for every NSIS uninstaller: some relaunch the temp copy even
+  under `Start-Process -Wait`, so the helper returns while the removal is still going. If
+  leftovers persist with the flag already set, poll for the worker process (`Un_A`,
+  `uninstall`) in an `after_uninstall_ps_script` before judging the result — the
+  `redpanda_cpp` role carries that pattern.
 - **`download` re-downloads every run** — `checksum` field in the schema is missing or wrong.
 - **`copy` fails** — `win_workman_remote_tmp` dir does not exist or WinRM/SSH not accessible;
   run `secure_ssh` task first and confirm connectivity with `ssh maint@<ip>`.
