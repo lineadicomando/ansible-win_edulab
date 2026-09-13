@@ -23,6 +23,10 @@ description: Use when reading, writing, or debugging inventory files for this pr
 | `spalla_info1`  | Informatics lab 1 — Spalla campus |
 | `spalla_info2`  | Informatics lab 2 — Spalla campus |
 | `spalla_ling`   | Language lab — Spalla campus |
+| `spalla_aule`   | Classroom PCs — Spalla campus. Flat `aule` group, no teachers/students split, per-host `ansible_user` |
+
+Only `school` is tracked by git; `.gitignore` excludes `inventories/*` and re-includes it.
+The site inventories exist locally only.
 
 ---
 

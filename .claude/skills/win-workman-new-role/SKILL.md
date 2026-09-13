@@ -1,6 +1,6 @@
 ---
 name: win-workman-new-role
-description: Use when adding a new software role to the win_workman catalog — covers directory layout, vars/main.yaml schema definition, tasks/main.yaml dispatcher, meta/main.yaml, and documentation
+description: Use when adding a new software role to the win_workman catalog — covers directory layout, vars/main.yaml schema definition, tasks/main.yaml dispatcher, dependency guards, meta/main.yaml and meta/mcp.yaml, and the catalog docs
 ---
 
 # Adding a New Software Role to win_workman
@@ -22,7 +22,8 @@ roles/<schema>/
 ├── vars/
 │   └── main.yaml     # schema definition + supporting computed vars
 └── meta/
-    └── main.yaml
+    ├── main.yaml
+    └── mcp.yaml      # read by the get_role_info MCP tool
 ```
 
 For roles with custom actions (e.g., privacy enforcement, data removal), add:
@@ -72,10 +73,11 @@ win_workman_<schema>_schema:
       url: https://...
       checksum: sha256:<hex>
   shortcuts: []                 # omit or leave empty if none needed
-
-win_workman_schema_role_name: lineadicomando.win_workman.<schema>
-win_workman_schema_dir: <schema>
 ```
+
+Add `role: lineadicomando.win_workman.<schema>` inside the schema dict when the role uses
+install/uninstall hooks — that field is how `pkg_utils` finds the hook task files. Most
+roles in the catalog carry it anyway; it costs nothing and keeps hooks available later.
 
 > **`searchName`** must match the `DisplayName` value in the Windows Uninstall registry key — verify with `Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | Select DisplayName,DisplayVersion`.
 
@@ -149,13 +151,11 @@ win_workman_<schema>_schema:
 
 ### Role with custom actions
 
+Dispatch the custom action first, then fall through to `pkg_workflow` for everything else.
+`veyon` is the worked example in the catalog.
+
 ```yaml
 ---
-- name: Set schema role context
-  ansible.builtin.set_fact:
-    win_workman_schema_role_name: lineadicomando.win_workman.<schema>
-    win_workman_schema_dir: <schema>
-
 - name: Dispatch action my_action
   ansible.builtin.include_role:
     name: lineadicomando.win_workman.<schema>
@@ -214,24 +214,19 @@ Each hook file is a standard task list. Use `win_workman_install_result.changed`
 
 ### Role with a dependency on another schema role
 
-Use `install_dep` from `pkg_utils` to install a dependency before dispatching. This preserves `win_workman_schema_role_name` / `win_workman_schema_dir` after the dependency's `set_fact` calls would otherwise overwrite them.
-
-`win_workman_action` passed by the dispatcher is `""` when no action is specified in the task string — use `default('on', true)` (not bare `default('on')`) so the condition fires for both undefined and empty string:
+Include the dependency role directly — there is no `install_dep` helper in `pkg_utils`:
 
 ```yaml
 ---
-- name: Install dependency
+# win_workman_dep: lineadicomando.win_workman.<dep_schema>
+- name: Install dependency <dep_schema>
   ansible.builtin.include_role:
-    name: lineadicomando.win_workman.pkg_utils
-    tasks_from: install_dep
+    name: lineadicomando.win_workman.<dep_schema>
   vars:
-    win_workman_dep_role: lineadicomando.win_workman.<dep_schema>
-  when: win_workman_action | default('on', true) == 'on'
-
-- name: Set schema role context
-  ansible.builtin.set_fact:
-    win_workman_schema_role_name: lineadicomando.win_workman.<schema>
-    win_workman_schema_dir: <schema>
+    win_workman_action: "on"
+  when:
+    - (win_workman_task.act | default('on', true)) == 'on'
+    - "'nodep' not in (win_workman_task_argv | default([]))"
 
 - name: Dispatch to package workflow
   ansible.builtin.include_role:
@@ -239,12 +234,25 @@ Use `install_dep` from `pkg_utils` to install a dependency before dispatching. T
     tasks_from: pkg_workflow
   vars:
     win_workman_schema: "{{ win_workman_<schema>_schema }}"
-    win_workman_schema_hooks:
-      after_install: true
-      after_uninstall: true
 ```
 
-> The `Set schema role context` `set_fact` is required when a dependency is installed first, because the dependency's own `Set schema role context` overwrites `win_workman_schema_role_name` at play scope. Place it immediately before the `pkg_workflow` dispatch.
+Two things in that guard are easy to get wrong, and both have been bugs:
+
+- Guard on **`win_workman_task.act`**, not `win_workman_action`. Vars passed to
+  `include_role` persist in the play, so after the dependency has been included with
+  `win_workman_action: "on"` every later task in the run sees that value and
+  `<schema>-info` would install the dependency too. The dispatcher reassigns
+  `win_workman_task` on each loop iteration.
+- Use **`default('on', true)`**, not bare `default('on')`. A bare task string like
+  `winfsp` parses with `act` as the empty string, which a plain `default` leaves alone.
+
+The `# win_workman_dep:` comment is the marker the catalog docs are generated from — keep
+it. The `nodep` condition lets `<schema>-on-nodep` skip the dependency.
+
+Hooks stay correct across a dependency without any extra work, because `include_tasks`
+resolves the hook file from `win_workman_schema.role` — a field of the schema dict passed
+to `pkg_workflow` — not from a play-scoped fact. `gcpw` is the worked example: dependency
+on `chrome`, plus `after_install` and `after_uninstall`.
 
 ---
 
@@ -265,48 +273,58 @@ dependencies: []
 
 ---
 
-## Step 4 — Documentation
+## Step 4 — meta/mcp.yaml
 
-Create `docs/roles/<schema>.md` using the appropriate template:
-- `docs/roles/TEMPLATE-software-simple.md` — roles with only on/off/download/info
-- `docs/roles/TEMPLATE-software-custom.md` — roles with additional custom actions
+This is what the `get_role_info` MCP tool reads. 77 of the roles have one; a role without
+it is invisible to anyone asking "what options does `<schema>` have". Only needed for
+roles with custom actions or user-facing defaults, but cheap to write.
 
-Update `docs/index.md` to add the role to the catalog table.
+```yaml
+---
+display_name: <Display Name>
+custom_actions:
+  - name: <action>
+    description: <what it does>
+defaults:
+  - var: win_workman_<schema>_<option>
+    type: bool          # bool | str | list | int
+    default: false
+    description: <what it controls>
+notes: >
+  Operational guidance — when to prefer the standalone playbook over run_tasks, or
+  which action to use for an incremental update.
+```
 
 ---
 
-## Common schema.package fields
+## Step 5 — Documentation
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `setup_file` | string | Installer filename (relative to temp dir) |
-| `searchName` | string | Registry DisplayName for detection |
-| `version` | string | Target version for upgrade comparison |
-| `provider` | string | `registry` (default) or `portable` |
-| `install_args` | list | Silent install flags |
-| `uninstall_args` | list | Silent uninstall flags |
-| `before_install_ps_script` | string | PowerShell run before install |
-| `after_install_ps_script` | string | PowerShell run after install |
-| `before_uninstall_ps_script` | string | PowerShell run before uninstall |
-| `after_uninstall_ps_script` | string | PowerShell run after uninstall completes |
-| `cleanup_paths` | list | Paths to remove after uninstall |
-| `path_dirs` | list | Dirs to add to Windows PATH |
-| `product_id` | string | Registry key name used for uninstall (when `searchName` is ambiguous) |
-| `uninstall_before_upgrade` | bool | Remove before re-installing (default false) |
-| `uninstall_via_helper` | bool | Run uninstall via SYSTEM scheduled task instead of win_package (default false) |
-| `portable_dir` | string | Folder name under `win_workman_portable_path` |
+Create `docs/roles/catalog/<schema>.md` from the appropriate template:
+- `docs/roles/TEMPLATE-software-simple.md` — roles with only on/off/download/info
+- `docs/roles/TEMPLATE-software-custom.md` — roles with additional custom actions
+
+Core and management roles live in `docs/roles/core/` and `docs/roles/management/`
+instead. Update `docs/index.md` to add the role to the catalog table.
+
+The catalog doc carries an `Installer:` line repeating the setup filename — it has to be
+re-edited on every version bump. See **win-workman-pkg-update**.
+
+---
+
+For the full list of `schema.package` fields and what each one does, see
+**win-workman-schema** — it is not repeated here.
 
 ---
 
 ## Checklist
 
-- [ ] `vars/main.yaml` — schema defined, `win_workman_schema_role_name` and `win_workman_schema_dir` set
+- [ ] `vars/main.yaml` — `win_workman_<schema>_schema` defined; `role:` set if the role uses hooks
 - [ ] `tasks/main.yaml` — delegates to `pkg_workflow` (or custom dispatchers + `pkg_workflow`)
 - [ ] `tasks/main.yaml` — hooks passed via `vars:` to `pkg_workflow`, not in `defaults/`
-- [ ] `tasks/main.yaml` — dependencies use `install_dep`; `set_fact` to restore context placed before `pkg_workflow`
-- [ ] `tasks/main.yaml` — action conditions use `default('on', true)` (not bare `default('on')`)
+- [ ] `tasks/main.yaml` — dependencies guard on `(win_workman_task.act | default('on', true)) == 'on'`, with the `# win_workman_dep:` marker comment
 - [ ] `meta/main.yaml` — present
-- [ ] `docs/roles/<schema>.md` — created from template
+- [ ] `meta/mcp.yaml` — present if the role has custom actions or user-facing defaults
+- [ ] `docs/roles/catalog/<schema>.md` — created from template
 - [ ] `docs/index.md` — role added to catalog table
 - [ ] Checksum verified (`sha256sum <installer>`)
 - [ ] `searchName` matches actual Windows registry `DisplayName`

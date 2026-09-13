@@ -26,6 +26,7 @@ The entry point for standard workflows is `pkg_workflow`, which internally route
 | `win_workman_mode_force_logoff` | `true` | Force logoff on lock |
 | `win_workman_restart_timeout` | `600` | Seconds to wait for reboot |
 | `win_workman_restart` | `true` | Whether reboots are allowed |
+| `win_workman_cleanup_uninstaller_dir` | `true` | After a successful uninstall, remove the install directory when only the uninstaller's own files are left — Inno Setup cannot delete the running `unins000.exe` |
 
 Override these in inventory `group_vars` or play `vars`.
 
@@ -52,7 +53,11 @@ Routes `win_workman_action` to:
 | `download` | `pkg_act_download` |
 | `copy` | `pkg_act_copy` |
 | `info` | `pkg_act_info` |
+| `shortcuts` | `pkg_act_shortcuts` |
 | `is_present` | `pkg_act_is_present` |
+
+The accepted set is `win_workman_pkg_actions` in `pkg_utils/vars/main.yaml`; anything else
+fails with *Unknown action*, listing the valid values.
 
 ---
 
@@ -98,6 +103,12 @@ Downloads (if needed) and copies to `win_workman_remote_tmp` on the Windows targ
 ### pkg_act_info — report state, no changes
 
 Reads registry (or filesystem for portable), reports `win_workman_is_present`, `win_workman_installed_version`, `win_workman_operation`. Sets `changed: false`.
+
+### pkg_act_shortcuts — re-create shortcuts only
+
+Applies `schema.shortcuts` with `state: present` without running the install workflow.
+Restores Desktop and Start Menu entries on an already installed package. Removal stays
+with `off`, which includes the same tasks with `state: absent`.
 
 ### pkg_act_is_present — assert installed
 
@@ -285,6 +296,56 @@ Removes files from `win_workman_remote_tmp` after install.
     tasks_from: shortcut_cleaner
 ```
 
+### services_stop — stop schema services before install/uninstall
+
+Stops every service in `win_workman_schema.services` that exists, so the installer can
+replace files the service processes hold locked. Silent installers usually skip locked
+files without reporting an error, leaving a mix of old and new binaries. `pkg_act_on`
+brings the services back to their declared state afterwards.
+
+### detect_lang — pick a language code from the host locale
+
+```yaml
+- ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: detect_lang
+  vars:
+    win_workman_detect_lang_allowed: [en_US, it_IT]   # required
+    win_workman_detect_lang_map: {}                   # optional BCP47 → code overrides
+```
+
+Reads `Get-WinSystemLocale`, `Get-SystemPreferredUILanguage`, `Get-UICulture` and
+`Get-Culture`, then resolves each candidate through `lang_map` → `replace('-','_')` →
+ISO 639-1 base code, taking the first hit in `allowed`. Writes `win_workman_default_lang`,
+leaving it unchanged when nothing matches.
+
+### registry_read — read a single registry value
+
+```yaml
+- ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: registry_read
+  vars:
+    win_workman_winreg_path: 'HKLM\SOFTWARE\Vendor\App'
+    win_workman_winreg_name: InstallPath
+```
+
+Normalises the hive prefix, so `HKLM\...`, `HKLM:\...` and `Registry::HKEY_LOCAL_MACHINE\...`
+all work.
+
+### se_read — read a user-rights assignment
+
+```yaml
+- ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: se_read
+  vars:
+    win_workman_se_read_right: SeDenyInteractiveLogonRight
+```
+
+Exports `USER_RIGHTS` with `secedit /export` and returns the SIDs/accounts assigned to the
+named right. Used by `lock` for the maintenance-mode logon restriction.
+
 ### include_tasks — run role-internal task file
 
 Used to call optional hook files (`before_install`, `after_install`) from a schema role:
@@ -299,21 +360,49 @@ Used to call optional hook files (`before_install`, `after_install`) from a sche
 
 Looks for `roles/<schema_dir>/tasks/before_install.yaml`; skips if absent.
 
-### install_dep — install a role dependency, preserving schema context
+---
 
-Installs another schema role as a dependency while saving and restoring `win_workman_schema_role_name` and `win_workman_schema_dir`. Use this instead of calling `include_role` directly, to prevent the dependency's `set_fact` calls from polluting the caller's hook context.
+## Role dependencies — not a pkg_utils include
+
+There is **no `install_dep` task include**. A schema role that needs another one installs
+it with a plain `include_role` on the dependency, guarded so it only fires for the install
+action:
 
 ```yaml
-- ansible.builtin.include_role:
-    name: lineadicomando.win_workman.pkg_utils
-    tasks_from: install_dep
+# roles/winfsp/tasks/main.yaml
+# win_workman_dep: lineadicomando.win_workman.virtiogt
+- name: Install dependency virtiogt
+  ansible.builtin.include_role:
+    name: lineadicomando.win_workman.virtiogt
   vars:
-    win_workman_dep_role: lineadicomando.win_workman.chrome   # required
-    win_workman_dep_action: "on"                              # optional, default "on"
-  when: win_workman_action | default('on', true) == 'on'
+    win_workman_action: "on"
+  when: (win_workman_task.act | default('on', true)) == 'on'
 ```
 
-The save/restore is done via `set_fact`, so it always overrides any stale play-scoped values left by the dependency role.
+The guard reads **`win_workman_task.act`**, not `win_workman_action`. Both details matter:
+
+- `act` is `""` for a bare task string like `winfsp`, so `default('on', true)` is required —
+  a bare `default('on')` leaves the empty string and the dependency never installs.
+- `win_workman_action` cannot be used: vars passed to `include_role` persist in the play, so
+  once a dependency has been included with `win_workman_action: "on"` every later task in
+  the same run sees that value, and `winfsp-info` would install the dependency too. The
+  dispatcher reassigns `win_workman_task` on every loop iteration, which is why the guard
+  is anchored there.
+
+Roles that take a dependency accept `nodep` in the task string to skip it — the guard adds
+a second condition:
+
+```yaml
+  when:
+    - (win_workman_task.act | default('on', true)) == 'on'
+    - "'nodep' not in (win_workman_task_argv | default([]))"
+```
+
+The `# win_workman_dep: <fqcn>` comment above each block is the marker the catalog docs are
+generated from — keep it in sync.
+
+Current dependency edges: `winfsp` → `virtiogt`; `mysql_server`, `mysql_workbench`, `ntop`,
+`seb`, `sketchup2026` → `vcredist14`; `gcpw`, `googledrive` → `chrome`.
 
 ---
 
