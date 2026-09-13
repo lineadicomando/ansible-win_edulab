@@ -1,0 +1,47 @@
+---
+# Lifecycle test for the redpanda_cpp role.
+#
+#   ansible-playbook tests/redpanda_cpp.yaml
+#   ansible-playbook tests/redpanda_cpp.yaml -e vm_host=student01
+#
+# Reverts the target to the baseline snapshot, then walks the full pkg lifecycle.
+# The is_present-after-off step is deliberately left out: it is expected to fail
+# and would abort the play, so absence is verified with the trailing `info`.
+
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: "{{ vm_host | default('teacher') }}"
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake host
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ vm_host | default('teacher') }}"
+
+- name: Authorize SSH key access
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - secure_ssh
+
+- name: Lifecycle test - redpanda_cpp
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - redpanda_cpp-info
+          - redpanda_cpp-download
+          - redpanda_cpp-copy
+          - redpanda_cpp-on
+          - redpanda_cpp-on
+          - redpanda_cpp-info
+          - redpanda_cpp-is_present
+          - redpanda_cpp-off
+          - redpanda_cpp-info
