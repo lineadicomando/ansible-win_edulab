@@ -138,7 +138,12 @@ download proves the hash.
 
 Pay attention on a major version jump: `install_args` and the uninstall path are the
 parts that break. After `off`, confirm the install directory and shortcuts are really
-gone.
+gone — **on the filesystem**, not from `info`, which reads the registry and reports a
+package absent as soon as its uninstall entry is deleted. A green `off` followed by a
+green `info` is not proof: `dbeaver` passed both while leaving 177 MB behind, because the
+NSIS uninstaller had been reported done while it was still running. If the bump is the
+first real test the role has had, budget for finding that kind of defect — see
+`win-workman-pkg-test`.
 
 ### 7. Commit and push
 

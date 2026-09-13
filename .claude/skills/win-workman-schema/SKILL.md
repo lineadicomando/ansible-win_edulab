@@ -37,7 +37,7 @@ win_workman_<schema>_schema:
     uninstall_args:
       - /VERYSILENT
     uninstall_before_upgrade: false        # default false; set true for MSI upgrades
-    uninstall_via_helper: false            # default false; run uninstall string via PowerShell Start-Process instead of win_package (use when win_package cannot handle the uninstaller)
+    uninstall_via_helper: false            # default false; run uninstall string via PowerShell Start-Process -Wait instead of win_package. Required for NSIS installers (see below)
     uninstall_valid_rc:                    # optional; list of exit codes accepted as success by uninstall_via_helper (default [0])
       - 0
       - 19
@@ -107,9 +107,9 @@ and `files` are present only in the 56 that actually install something — actio
   action (`act` is `""`). Almost always `!!str on`; `wu` uses `run`, `wallpaper` uses `set`,
   `chkdsk` uses `check`. Quote it — bare `on` is a YAML boolean.
 
-> **Trap:** `cleanup_paths` only takes effect under `package`. Six roles
-> (`embarcadero_devcpp`, `python310`–`python314`) declare it at the top level of the schema,
-> where `pkg_act_off` never reads it, so those paths are not removed on uninstall.
+> **Trap:** `cleanup_paths` only takes effect under `package`, never at the top level of
+> the schema, where `pkg_act_off` does not read it. All 12 roles that use it declare it
+> correctly today; check the nesting first if the paths survive an uninstall.
 
 ---
 
@@ -253,6 +253,7 @@ win_workman_<schema>_schema:
 |---------|-----|
 | `searchName` doesn't match registry | Run `Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' \| Select DisplayName` on target; `searchName` supports glob (e.g. `"App*"`) |
 | Uninstall fails with win_package | Set `uninstall_via_helper: true` to run uninstall via PowerShell `Start-Process`; also check `product_id` matches the registry key name |
+| Uninstall *reports success* but the install tree is still on disk | NSIS installer. `Uninstall.exe` relaunches itself from `%TEMP%` and returns rc 0 immediately, so `win_package` calls it done and the detached child is killed with the session. Set `uninstall_via_helper: true`, which waits. With `cleanup_registry_key: true` the failure is invisible to `info` — check the filesystem. Some NSIS uninstallers relaunch the temp copy even under `Start-Process -Wait`; if leftovers survive with the flag set, poll for the worker process in an `after_uninstall_ps_script` |
 | Uninstall succeeds but returns non-zero rc | Set `uninstall_via_helper: true` and add `uninstall_valid_rc: [0, <rc>]` to accept the specific exit code as success (e.g. Vivaldi returns 19) |
 | Checksum mismatch | Run `sha256sum <file>` on the installer you stored; re-download if needed |
 | Portable role not detected | Ensure `portable_dir` matches the actual folder name under `C:\PortableApps` |
