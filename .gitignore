@@ -1,5 +1,4 @@
 .claude/settings.local.json
-.claude/skills/
 .mcp.json
 *.pyc
 __pycache__/

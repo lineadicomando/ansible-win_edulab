@@ -20,9 +20,10 @@ a VM, see `win-workman-pkg-test`. This skill covers only the bump procedure.
 ## Before anything: the collection is a separate git repo
 
 `ansible_collections/lineadicomando/win_workman` is a **symlink** to a checkout of
-`github.com/lineadicomando/ansible-collection-win_workman`. Editing a role leaves
-`git status` in `ansible-win_edulab` completely clean, and `git check-ignore` on the path
-fails with *"si trova oltre un collegamento simbolico"*.
+`github.com/lineadicomando/ansible-collection-win_workman` (same for `samba_ad_dc`).
+Editing a role leaves `git status` in `ansible-win_edulab` completely clean, and
+`git check-ignore` on the path fails with *"is beyond a symbolic link"* — the message is
+localised, so match on the failure, not the wording.
 
 Run every git command inside the collection:
 

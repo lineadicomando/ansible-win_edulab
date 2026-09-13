@@ -15,7 +15,9 @@ Every software role defines a `win_workman_<schema>_schema` dict in `vars/main.y
 
 ```yaml
 win_workman_<schema>_schema:
-  name: <Display Name>        # human-readable, used in task labels
+  name: <Display Name>                        # human-readable, used in task labels
+  role: lineadicomando.win_workman.<schema>   # FQCN — how pkg_utils resolves hook task files
+  default_action: !!str on                    # action used when the task string carries none
 
   package:
     # --- Detection ---
@@ -89,6 +91,25 @@ win_workman_<schema>_schema:
       start_mode: auto                     # auto | manual | disabled
       state: started                       # started | stopped
 ```
+
+---
+
+## The three top-level keys every schema has
+
+`name`, `role` and `default_action` are present in all 75 schemas in the catalog. `package`
+and `files` are present only in the 56 that actually install something — action-only roles
+(`restart`, `wol`, `ping`, `sfc`, `lock`, …) have neither.
+
+- **`role`** is the FQCN of the owning role. `pkg_utils/tasks/include_tasks.yaml` resolves
+  hook files through it, so a role with `win_workman_schema_hooks` and no `role:` silently
+  runs no hooks.
+- **`default_action`** is what `pkg_workflow` falls back to when the task string carries no
+  action (`act` is `""`). Almost always `!!str on`; `wu` uses `run`, `wallpaper` uses `set`,
+  `chkdsk` uses `check`. Quote it — bare `on` is a YAML boolean.
+
+> **Trap:** `cleanup_paths` only takes effect under `package`. Six roles
+> (`embarcadero_devcpp`, `python310`–`python314`) declare it at the top level of the schema,
+> where `pkg_act_off` never reads it, so those paths are not removed on uninstall.
 
 ---
 

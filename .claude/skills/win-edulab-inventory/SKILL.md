@@ -23,6 +23,10 @@ description: Use when reading, writing, or debugging inventory files for this pr
 | `lab_c`  | Informatics lab 1 — site B |
 | `lab_d`  | Informatics lab 2 — site B |
 | `lab_e`   | Language lab — site B |
+| `lab_f`   | Classroom PCs — site B. Flat `aule` group, no teachers/students split, per-host `ansible_user` |
+
+Only `school` is tracked by git; `.gitignore` excludes `inventories/*` and re-includes it.
+The site inventories exist locally only.
 
 ---
 

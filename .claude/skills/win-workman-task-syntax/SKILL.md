@@ -97,7 +97,11 @@ win_workman_some_arg: "{{ win_workman_task_argv[2] | default('default_value') }}
 | `download` | Download installer to controller storage only |
 | `copy` | Copy installer to remote temp, no install |
 | `info` | Report installed version/state, no changes |
+| `shortcuts` | Re-create the schema shortcuts on an already installed package, without re-running the install |
 | `is_present` | Fail if software is not installed |
+
+This list is `win_workman_pkg_actions` in `pkg_utils/vars/main.yaml`; `pkg_workflow` fails
+with *Unknown action* for anything else, listing the valid set in the message.
 
 ---
 

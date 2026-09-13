@@ -45,7 +45,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 
 **Rule**: always use `preview=true` before destructive operations (`-off`, `shutdown`, `logoff`, `lock`) or operations that require extra variables.
 
-**Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (e.g. `lab_a`, `lab_b`, `lab_c`, `lab_d`, `lab_e`) to both `get_inventory` and `run_tasks`/`run_playbook`.
+**Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (e.g. `lab_a`, `lab_b`, `lab_c`, `lab_d`, `lab_e`, `lab_f`) to both `get_inventory` and `run_tasks`/`run_playbook`.
 
 ---
 
@@ -187,9 +187,11 @@ Not needed for standard roles without custom actions (e.g. `vlc`, `git`, `python
 | `wol` | `lab_win` | yes | Wake-on-LAN broadcast across the inventory |
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
-| `maintenance` | `lab_win` | yes | Full maintenance cycle: lock → wu-run → wim/sfc → chrome/edge → wallpaper → wu-pause → restart → unlock |
+| `maintenance` | `windows11` | yes | Full maintenance cycle: lock → wu-run → wim/sfc → chrome/edge → wallpaper → wu-pause → restart → unlock |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
 | `samba_dc_build` | `samba_ad_dc` | yes | Build a new Samba AD Domain Controller |
+| `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
+| `shutdown` | `lab_win` | yes | Shut the lab down |
 
 Pass `target_hosts` via the `e` parameter to override the default group:
 

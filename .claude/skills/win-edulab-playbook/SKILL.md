@@ -58,10 +58,15 @@ Via MCP use `run_tasks` instead of calling the playbook directly — see the **w
 | `playbooks/win_wm.yaml` | passed via `-l` | Software dispatcher (all win_workman tasks) |
 | `playbooks/veyon.yaml` | `lab_win` | Full Veyon setup (keypair + config + network objects) |
 | `playbooks/seb_classroom.yaml` | `students` | SEB configuration for Google Classroom |
+| `playbooks/gcpw.yaml` | `lab_win` | Google Credential Provider for Windows |
+| `playbooks/maintenance.yaml` | `windows11` | Routine maintenance cycle: updates and cleanup |
 | `playbooks/autologon.yaml` | `lab_win` | Hardcoded autologon with restart |
 | `playbooks/wol.yaml` | `lab_win` | Wake-on-LAN broadcast |
+| `playbooks/shutdown.yaml` | `lab_win` | Shut the lab down |
 | `playbooks/lab_cad.yaml` | `lab_cad` | CAD lab setup |
 | `playbooks/lab_coding.yaml` | `lab_coding` | Coding lab setup |
+| `playbooks/samba_dc_build.yaml` | `samba_ad_dc` | Build a Samba AD Domain Controller |
+| `playbooks/samba_dc_join.yaml` | `lab_win` | Join Windows hosts to the Samba AD domain |
 
 > **Note on autologon**: prefer `run_tasks(["autologon"])` with `e` vars for full control. `autologon.yaml` is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `lab_win`.
 
