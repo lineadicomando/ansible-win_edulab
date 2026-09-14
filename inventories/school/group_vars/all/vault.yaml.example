@@ -1,4 +1,4 @@
-ansible_vault_password: "maint"
-ansible_vault_become_password: "maint"
+ansible_vault_password: "Edulab01"
+ansible_vault_become_password: "Edulab01"
 # At least 7 characters and AD complexity rules: samba-tool refuses anything less.
-samba_dc_build_administrator_passwd: "Ch4ngeMe!2026"
+samba_dc_build_administrator_passwd: "Edulab01"
