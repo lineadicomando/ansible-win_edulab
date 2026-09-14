@@ -1,8 +1,13 @@
 # MCP Server — win-edulab
 
 The `mcp/` directory contains an MCP (Model Context Protocol) server that exposes
-the collection to Claude Code. It lets you manage lab workstations in natural language:
+this project to Claude Code. It lets you manage lab workstations in natural language:
 "install Chrome on teacher", "run chkdsk on all students", and so on.
+
+It works alongside two servers shipped with the collections: **win-workman**
+(`run_tasks`, `get_role_info`) and **samba-ad-dc** (`samba`, `samba_dc_backup`,
+`samba_win_status`). Their tools are documented here too, since the three are
+used together.
 
 ## Architecture
 
@@ -39,7 +44,7 @@ A dedicated venv keeps the dependencies isolated and avoids conflicts with
 system packages. Install once, then point `.mcp.json` at the venv interpreter.
 
 ```bash
-cd /path/to/ansible-collection-win_edulab
+cd /path/to/ansible-win_edulab
 python3 -m venv mcp/.venv
 mcp/.venv/bin/pip install -e mcp/
 ```
@@ -50,8 +55,8 @@ Then update `.mcp.json` to use the venv interpreter (absolute path required):
 {
   "mcpServers": {
     "win-edulab": {
-      "command": "/path/to/ansible-collection-win_edulab/mcp/.venv/bin/python3",
-      "args": ["/path/to/ansible-collection-win_edulab/mcp/server.py"]
+      "command": "/path/to/ansible-win_edulab/mcp/.venv/bin/python3",
+      "args": ["/path/to/ansible-win_edulab/mcp/server.py"]
     }
   }
 }
@@ -80,12 +85,30 @@ is on `PATH` and the user-site packages are visible to the system `python3`.
 
 ### `.mcp.json` (project root)
 
-Declares the server to Claude Code. Committed to the repository so every developer
-gets the server automatically.
+Declares the servers to Claude Code. The file is gitignored because it holds
+machine-specific absolute paths: copy it from `.mcp.json.example` and adjust them.
+
+```bash
+cp .mcp.json.example .mcp.json
+```
 
 ```json
 {
   "mcpServers": {
+    "win-workman": {
+      "command": "python3",
+      "args": ["/path/to/ansible-collection-win_workman/mcp/server.py"],
+      "env": {
+        "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
+      }
+    },
+    "samba-ad-dc": {
+      "command": "python3",
+      "args": ["/path/to/ansible-collection-samba_ad_dc/mcp/server.py"],
+      "env": {
+        "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
+      }
+    },
     "win-edulab": {
       "command": "python3",
       "args": ["./mcp/server.py"]
@@ -93,6 +116,11 @@ gets the server automatically.
   }
 }
 ```
+
+The collection servers can point at a separate checkout of each collection or at
+the copy installed by `ansible-galaxy`, e.g.
+`ansible_collections/lineadicomando/win_workman/mcp/server.py`. They find the
+inventories through `ANSIBLE_PROJECT_ROOT`, which must point at this project.
 
 `args` can use paths relative to the project root. Claude Code sets the working
 directory to the project root before launching the server.
@@ -121,24 +149,26 @@ Call this first when you need to discover which hosts or groups are available.
 |-----------|------|---------|-------------|
 | `inventory` | string | `school` | Inventory name under `inventories/` |
 
-**Available inventories:** `ario_info`, `ario_ling`, `school`, `spalla_info1`,
-`spalla_info2`, `spalla_ling`, `test`
+**Available inventories:** every directory under `inventories/`. Only `school` is
+tracked by git; site-specific inventories next to it are gitignored.
 
-**Example response:**
+**Example response** (the `school` inventory, abridged):
 
 ```json
 {
   "hosts": {
-    "teacher":    { "ansible_host": "172.16.2.10" },
-    "student01":  { "ansible_host": "172.16.2.11" },
-    "student02":  { "ansible_host": "172.16.2.12" },
-    "samba-ad-dc":{ "ansible_host": "172.16.0.3"  }
+    "samba_ad_dc": { "ansible_host": "192.168.122.2",  "ansible_mac": "52:54:00:38:64:a0" },
+    "teacher":     { "ansible_host": "192.168.122.10", "ansible_mac": "52:54:00:1c:82:8e" },
+    "student01":   { "ansible_host": "192.168.122.11", "ansible_mac": "52:54:00:a6:db:78" },
+    "student02":   { "ansible_host": "192.168.122.12", "ansible_mac": "52:54:00:bf:d8:d6" }
   },
   "groups": {
+    "servers":   ["samba_ad_dc"],
     "teachers":  ["teacher"],
     "students":  ["student01", "student02"],
-    "servers":   ["samba-ad-dc"],
-    "windows11": ["teacher", "student01", "student02"]
+    "lab_win":   ["teacher", "student01", "student02"],
+    "windows11": ["teacher", "student01", "student02"],
+    "samba_dc":  ["samba_ad_dc"]
   }
 }
 ```
@@ -147,7 +177,8 @@ Call this first when you need to discover which hosts or groups are available.
 
 ### `run_tasks`
 
-Runs one or more `win_workman` tasks on a host or group via `playbooks/win_wm.yaml`.
+*Server: win-workman.* Runs one or more `win_workman` tasks on a host or group via
+the collection playbook `lineadicomando.win_workman.win_workman`.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -155,6 +186,10 @@ Runs one or more `win_workman` tasks on a host or group via `playbooks/win_wm.ya
 | `l` | string | no | `all` | Ansible limit: hostname or group name |
 | `inventory` | string | no | `school` | Inventory name under `inventories/` |
 | `preview` | boolean | no | `false` | Return the command without executing it |
+| `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
+
+The playbook runs on `hosts: all`, so leaving `l` at its default also targets the
+domain controller: always pass a Windows host or group such as `lab_win`.
 
 #### Task format
 
@@ -180,7 +215,7 @@ Examples: `chrome`, `chrome-off`, `chrome-info`, `chkdsk`, `sfc`, `wim-check`.
 Roles are read dynamically from `ansible_collections/lineadicomando/win_workman/roles/`
 at server startup, so the list reflects whatever version of the collection is installed.
 Typical roles include: `chrome`, `firefox`, `edge`, `brave`, `libreoffice`, `gimp`,
-`inkscape`, `vscode`, `python310`–`python314`, `zoom`, `vlc`, `veyon`, `7zip`,
+`inkscape`, `vscode`, `python310`–`python314`, `zoom`, `vlc`, `veyon`, `p7zip`,
 `chkdsk`, `sfc`, `wim`, `wu`, `restart`, `shutdown`, `wol`, `secure_ssh`, …
 
 #### The `preview` flag
@@ -194,10 +229,9 @@ Tool call:  run_tasks(t=["chrome"], l="teacher", preview=true)
 Response:
   Command to run:
 
-    ansible-playbook \
-      -i 'inventories/school/hosts.yaml' \
-      -l 'teacher' \
-      playbooks/win_wm.yaml \
+    ansible-playbook lineadicomando.win_workman.win_workman \
+      -i '/path/to/ansible-win_edulab/inventories/school/hosts.yaml' \
+      -l teacher \
       -e '{"t": "chrome"}'
 
   No command executed.
@@ -214,8 +248,8 @@ Pass multiple tasks in a single call to run them sequentially:
 This translates to:
 
 ```bash
-ansible-playbook -i inventories/school/hosts.yaml \
-  -l teacher playbooks/win_wm.yaml \
+ansible-playbook lineadicomando.win_workman.win_workman \
+  -i inventories/school/hosts.yaml -l teacher \
   -e '{"t": "chkdsk,sfc,wim-check"}'
 ```
 
@@ -231,11 +265,15 @@ the `win_workman` role (e.g. `veyon`, `wol`, `seb_classroom`, `autologon`).
 |-----------|------|----------|---------|-------------|
 | `playbook` | string | yes | — | Playbook name without `.yaml` extension |
 | `l` | string | no | `all` | Ansible limit |
-| `e` | object | no | `{}` | Extra vars passed as `-e '{...}'` |
+| `e` | object | no | `{}` | Extra vars passed as `-e '{...}'`, e.g. `{"target_hosts": "students"}` |
 | `inventory` | string | no | `school` | Inventory name |
+| `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
-**Available playbooks:** `autologon`, `cad`, `coding`, `seb_classroom`, `veyon`,
-`win_wm`, `wol`
+**Available playbooks:** `autologon`, `gcpw`, `lab_cad`, `lab_coding`, `maintenance`,
+`samba_dc_build`, `samba_dc_join`, `seb_classroom`, `shutdown`, `veyon`, `win_wm`, `wol`.
+
+Names resolve against `playbooks/` only: playbooks in `local/` must be run with
+`ansible-playbook local/<name>.yaml`.
 
 ---
 
@@ -289,19 +327,35 @@ error per host.
 
 ---
 
+### `run_status` and `wait_run`
+
+Read a run started with `background=true`. `run_status` returns the output so far and
+whether the run is still going; `wait_run` blocks until the run ends. Both servers that
+start runs (win-edulab and win-workman) expose them. See
+[Waiting for a background run](#waiting-for-a-background-run).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `run` | string | no | `latest` | Run id returned by the background call |
+| `since_line` | int | no | `0` | Line to resume from, as reported by the previous call |
+| `max_lines` | int | no | `200` | Most lines returned in one call |
+| `timeout` | int | no | `900` | `wait_run` only: seconds to wait, clamped to 5..3600 |
+
+---
+
 ### `samba`
 
-Manages the Samba AD Domain Controller via `samba-tool`, through the
-`lineadicomando.samba_ad_dc.samba` playbook. Requires the `samba_ad_dc`
+*Server: samba-ad-dc.* Manages the Samba AD Domain Controller via `samba-tool`,
+through the `lineadicomando.samba_ad_dc.samba` playbook. Requires the `samba_ad_dc`
 collection installed in the Ansible environment and the DC present in the
 inventory; `l` should target a single DC.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `object` | string | yes | — | `user`, `group`, `computer`, `ou`, `backup`, `restore` |
-| `action` | string | no | — | samba-tool verb; not required for backup/restore |
-| `args` | object | no | `{}` | Action-specific arguments |
-| `l` | string | no | `all` | Ansible limit (the DC host or group) |
+| `object` | string | yes | — | `user`, `group`, `computer`, `ou`, `home` |
+| `action` | string | yes | — | samba-tool verb |
+| `args` | object | no | `{}` | Action-specific arguments; `name` is required for every action except `list` |
+| `l` | string | no | `all` | Host pattern, passed to the playbook as `target_hosts` |
 | `inventory` | string | no | `school` | Inventory name |
 | `preview` | boolean | no | `false` | Return the command without executing it |
 
@@ -309,33 +363,61 @@ Common actions per object:
 
 | Object | Actions |
 |--------|---------|
-| `user` | `list`, `show`, `create`, `delete`, `enable`, `disable`, `setpassword` |
-| `group` | `list`, `show`, `listmembers`, `add`, `delete`, `addmembers`, `removemembers` |
-| `computer` | `list`, `show`, `create`, `delete` |
-| `ou` | `list`, `listobjects`, `create`, `delete` |
-| `backup` | args `type` (`online`/`offline`), `targetdir` |
-| `restore` | args `backup_file`, `targetdir`, `newservername`, `confirm: true` |
+| `user` | `list`, `show`, `create`, `present`, `delete`, `absent`, `enable`, `disable`, `setpassword`, `setprimarygroup` |
+| `group` | `list`, `show`, `listmembers`, `add`, `create`, `delete`, `absent`, `addmembers`, `removemembers` |
+| `computer` | `list`, `show`, `create`, `delete`, `absent` |
+| `ou` | `list`, `listobjects`, `create`, `delete`, `absent` |
+| `home` | `provision`, `absent` — the physical home directory, its LDAP attributes and the SMB share |
 
 Read-only actions (`list`, `show`, `listmembers`, `listobjects`) never change
-state. Use `preview: true` for destructive actions (`delete`, `disable`,
-`removemembers`, `restore`) and confirm with the user before executing.
+state; mutating user actions are idempotent. Use `preview: true` for destructive
+actions (`delete`, `absent`, `disable`, `removemembers`) and confirm with the user
+before executing.
 
 ```
 Tool call: samba(object="user", action="create",
                  args={"name": "alice", "password": "..."},
-                 l="samba-ad-dc", preview=true)
+                 l="samba_ad_dc", preview=true)
 
 Response:
   Command to run:
 
-    ansible-playbook \
-      lineadicomando.samba_ad_dc.samba \
-      -i 'inventories/school/hosts.yaml' \
-      -l 'samba-ad-dc' \
-      -e '{"samba_tool_object": "user", "samba_tool_action": "create", ...}'
+    ansible-playbook lineadicomando.samba_ad_dc.samba \
+      -i '/path/to/ansible-win_edulab/inventories/school/hosts.yaml' \
+      -e '{"samba_tool_object": "user", "samba_tool_action": "create", ..., "target_hosts": "samba_ad_dc"}'
 
   No command executed.
 ```
+
+---
+
+### `samba_dc_backup`
+
+*Server: samba-ad-dc.* Backs up or restores the domain controller through the
+`lineadicomando.samba_ad_dc.samba_dc_backup` playbook.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string | yes | — | `backup` or `restore` |
+| `args` | object | no | `{}` | Keys without the `samba_dc_backup_` prefix |
+| `l` | string | no | `all` | Host pattern, passed as `target_hosts` |
+| `inventory` | string | no | `school` | Inventory name |
+| `preview` | boolean | no | `false` | Return the command without executing it |
+
+- `backup` — `targetdir` (required); `domain` (default `true`), `domain_type`
+  (`online`/`offline`, default `offline`), `files` (default `true`), `files_paths`
+  (default `[/home]`). Always produces new archives and reports changed.
+- `restore` — **destructive**: rebuilds a DC from an archive. Requires
+  `restore_backup_file`, `restore_targetdir`, `restore_newservername` and
+  `restore_confirm: true`. Always preview first.
+
+---
+
+### `samba_win_status`
+
+*Server: samba-ad-dc.* Reports whether each Windows host is joined to an AD domain or
+a workgroup, and which one, through the `lineadicomando.samba_ad_dc.samba_win_status`
+playbook. Read-only. Accepts `l`, `inventory` and `preview`.
 
 ---
 
@@ -348,8 +430,8 @@ first and ask the user to confirm before executing.
 User:   shut down all students
 Agent:  Command to run:
 
-          ansible-playbook -i 'inventories/school/hosts.yaml' \
-            -l 'students' playbooks/win_wm.yaml \
+          ansible-playbook lineadicomando.win_workman.win_workman \
+            -i inventories/school/hosts.yaml -l students \
             -e '{"t": "shutdown"}'
 
         Proceed?
@@ -478,7 +560,7 @@ python3 mcp/server.py
 
 `ansible-playbook` must be on the `PATH` of the shell environment in which Claude
 Code is running. If you use a virtual environment for Ansible, activate it in your
-shell before launching Claude Code, or set the full path in `ansible.cfg`.
+shell before launching Claude Code.
 
 ### Relative path in args does not resolve
 
@@ -490,7 +572,7 @@ switch to an absolute path:
   "mcpServers": {
     "win-edulab": {
       "command": "python3",
-      "args": ["/absolute/path/to/ansible-collection-win_edulab/mcp/server.py"]
+      "args": ["/absolute/path/to/ansible-win_edulab/mcp/server.py"]
     }
   }
 }
@@ -508,16 +590,21 @@ mcp/
 ├── preflight.py        # Inventory, vault and SSH key checks run before a command
 ├── inventory.py        # Parses hosts.yaml, lists inventories and installed roles
 ├── runlog.py           # Per-run log files under logs/, written while the playbook runs
-└── pyproject.toml      # Package metadata and dependencies (mcp>=1.0, pyyaml>=6.0)
+├── pyproject.toml      # Package metadata and dependencies (mcp>=2.1.1, pyyaml>=6.0)
+└── requirements.txt    # The same dependencies, for pip install -r
 ```
 
 ### `ansible_runner.py`
 
 - `build_playbook_command(playbook, l, e, inventory)` — builds a playbook command list
-- `run_command(cmd, label)` — runs the command, tees its output to `logs/` line by line,
-  returns the combined stdout/stderr plus the log path
+- `run_command(cmd, label, notify, timeout, env)` — runs the command, tees its output to
+  `logs/` line by line, returns the combined stdout/stderr plus the log path
 - `run_raw(cmd, label, notify, timeout, env, redact)` — the same, returning the
   `RunResult` for a caller that renders the output itself
+- `start_run(cmd, label, env, redact)` — starts the command in the background and
+  returns its log path
+- `run_status(run, since_line, max_lines)` / `wait_run(run, timeout, since_line,
+  max_lines, notify)` — read a run's log now, or once it ends
 
 The `run_tasks` and `samba` tools documented above belong to the `win-workman` and
 `samba-ad-dc` MCP servers, which live in their own collections and keep their own
@@ -525,9 +612,14 @@ command builders.
 
 ### `runlog.py`
 
-- `run_logged(cmd, root, label, timeout=None)` — runs a command with its output written
-  to `logs/<timestamp>-<label>.log` as it arrives, and `logs/latest.log` repointed at it;
-  returns `(output, returncode, log_path, timed_out)`
+- `run_logged(cmd, root, label, timeout, on_line, path, env, redact)` — runs a command
+  with its output written to `logs/<timestamp>-<label>.log` as it arrives, and
+  `logs/latest.log` repointed at it; returns a `RunResult` (output, return code, log
+  path, timed out). `run_logged_async` is the same for the event loop, with progress
+  notifications
+- `start_logged(cmd, root, label, ...)` — starts a logged run in the background
+- `read_log(root, run, since_line, max_lines)` — a run's output so far and whether it
+  has ended; behind the `run_status` tool
 - `await_run(root, run, timeout, ...)` — polls a run's log until it ends, reporting
   progress as it goes; behind the `wait_run` tool
 - `done_path(log_path)` — the `<log>.done` sentinel, written once the log is flushed
