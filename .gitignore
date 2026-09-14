@@ -6,7 +6,7 @@ __pycache__/
 *.retry
 temp/
 
-# Collections are installed via: ansible-galaxy collection install -r requirements.yml -p .
+# Collections are installed via: ansible-galaxy collection install -r requirements.yaml -p .
 .ansible/
 ansible_collections/
 
