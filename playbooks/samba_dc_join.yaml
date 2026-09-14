@@ -2,5 +2,13 @@
 - name: Join AD DC Test
   hosts: "{{ target_hosts | default('lab_win') }}"
   gather_facts: false
+  # The join locates the domain through its SRV records, which only the DC
+  # serves: point the clients at it first when the inventory says so.
+  pre_tasks:
+    - name: Use the domain controller as DNS server
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers: "{{ samba_win_join_dns_servers }}"
+      when: samba_win_join_dns_servers | default([]) | length > 0
   roles:
     - role: lineadicomando.samba_ad_dc.samba_win_join

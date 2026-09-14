@@ -35,7 +35,9 @@ samba_dc_build_realm: SCHOOL.INTERNAL
 samba_dc_build_domain: SCHOOL
 samba_dc_build_fqdn: dc.school.internal
 samba_dc_build_search_domain: school.internal
-samba_dc_build_nameserver: 127.0.0.1
+# Upstream resolver, not the DC itself: apt needs it before Samba answers DNS,
+# and samba-tool provision takes it from resolv.conf as the dns forwarder.
+samba_dc_build_nameserver: 192.168.122.1
 samba_dc_build_address: 192.168.122.2
 samba_dc_build_netmask: 255.255.255.0
 samba_dc_build_gateway: 192.168.122.1
@@ -51,6 +53,10 @@ samba_win_join_realm: "{{ samba_dc_build_realm }}"
 samba_win_join_search_domain: "{{ samba_dc_build_search_domain }}"
 samba_win_join_administrator_username: "{{ samba_dc_build_administrator_username }}"
 samba_win_join_administrator_passwd: "{{ samba_dc_build_administrator_passwd }}"
+# DNS servers set on the clients before joining: the domain SRV records are
+# only served by the DC, not by the libvirt resolver handed out to the VMs.
+samba_win_join_dns_servers:
+  - "{{ samba_dc_build_address }}"
 
 # Browsers shortcuts
 win_workman_browser_shortcut_url: https://lineadicomando.it
