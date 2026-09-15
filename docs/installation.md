@@ -119,30 +119,136 @@ that come with it.
 
 If the computer you intend to run Ansible commands from is a Windows 11 machine, the most reliable way to run Ansible is via **WSL2** (Windows Subsystem for Linux).
 
-#### 1. Install WSL2 and Ubuntu
+Every step below is a command, run from a PowerShell terminal: the Start menu
+is never needed. WSL itself and the Linux distribution are installed in two
+separate steps, with a restart in between, so that each one can be checked
+before moving on — the single `wsl --install` shortcut does both at once, and
+when the restart interrupts it the distribution is silently never registered.
 
-Open PowerShell as an Administrator and run:
+WSL2 runs a lightweight virtual machine, so hardware virtualization must be
+enabled in the firmware (or nested virtualization, when the control node is
+itself a VM).
+
+#### 1. Install WSL
+
+In a PowerShell terminal **run as Administrator**:
+
 ```powershell
-wsl --install
+wsl --install --no-distribution
+Restart-Computer
 ```
-This command will enable the necessary features and install the default Ubuntu distribution. When it finishes, restart your computer if prompted by the system.
 
-#### 2. Configure the Linux environment
+<details>
+<summary>If <code>wsl --install</code> only replies that WSL is not installed</summary>
 
-Once restarted, open the **Ubuntu** app from the Start menu and complete the initial setup by creating a UNIX username and password. After that, update the system and install the required packages:
+The `wsl.exe` shipped with Windows is a stub that downloads WSL on first use,
+and in some contexts — a remote SSH session, a machine without Microsoft Store
+access — it just prints *"Windows Subsystem for Linux is not installed"* and
+exits. The same result can be reached without it, by enabling the virtual
+machine component and installing the WSL package from its GitHub release:
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart
+$rel = Invoke-RestMethod https://api.github.com/repos/microsoft/WSL/releases/latest
+$msi = "$env:TEMP\wsl.x64.msi"
+Invoke-WebRequest -UseBasicParsing -OutFile $msi `
+    -Uri ($rel.assets | Where-Object name -like '*.x64.msi').browser_download_url
+Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /norestart" -Wait
+Restart-Computer
+```
+
+</details>
+
+After the restart, check that WSL answers and defaults to version 2:
+
+```powershell
+wsl --version
+wsl --status
+```
+
+#### 2. Install Ubuntu
+
+From here on a **regular** PowerShell terminal is enough. Use the Windows
+account that will run Ansible: distributions are registered per user, so one
+installed from a different account does not show up for yours.
+
+```powershell
+wsl --list --online                          # available distributions
+wsl --install -d Ubuntu-24.04 --no-launch
+wsl --list --verbose                         # Ubuntu-24.04 ... Stopped  2
+```
+
+Pick **Ubuntu 24.04 or newer**: ansible-core 2.20 requires Python 3.12 on the
+control node, and Ubuntu 22.04 ships 3.10. The name `Ubuntu` is an alias for the
+latest LTS; naming the release explicitly keeps the following commands
+predictable.
+
+#### 3. Create the Linux user
+
+`--no-launch` skips the interactive first-run setup, so the distribution starts
+with `root` only. Create the user (`ansible` here, any name will do), give it a
+password and make it the default:
+
+```powershell
+wsl -d Ubuntu-24.04 -u root --exec useradd -m -s /bin/bash -G sudo ansible
+wsl -d Ubuntu-24.04 -u root --exec passwd ansible
+wsl --manage Ubuntu-24.04 --set-default-user ansible
+wsl --terminate Ubuntu-24.04
+```
+
+> **Keep the commands passed from PowerShell simple.** Windows PowerShell 5.1
+> mangles arguments that contain quotes and backslashes, and without `--exec`
+> the command line goes through the Linux shell, which expands `$` again.
+> Anything beyond a plain command is better typed inside the Ubuntu shell.
+
+#### 4. Install Ansible
+
+Open a shell in the distribution:
+
+```powershell
+wsl -d Ubuntu-24.04 --cd ~
+```
+
+and install the packages and Ansible:
 
 ```bash
 sudo apt update
 sudo apt upgrade -y
 sudo apt install -y git python3-pip python3-venv sshpass pipx
 pipx install --include-deps ansible
+exit
 ```
 
 Ansible is installed with `pipx` here for the same reason as on a Linux control
 node: the `ansible` package shipped by the distribution is usually older than
 the 2.20 required by the roles.
 
-From this point on, you can clone the repository and run playbooks directly from the Ubuntu terminal.
+`pipx` puts the commands in `~/.local/bin`, which the login shell adds to
+`PATH` only if the directory already exists — hence the `exit`. Open the shell
+again and check:
+
+```powershell
+wsl -d Ubuntu-24.04 --cd ~
+```
+
+```bash
+ansible --version   # must report core 2.20 or newer
+```
+
+From this point on, you can clone the repository and run playbooks directly from the Ubuntu shell.
+
+#### Troubleshooting: Ubuntu is not in the Start menu
+
+The Start menu entry (`%APPDATA%\Microsoft\Windows\Start Menu\Ubuntu-24.04.lnk`)
+and the Windows Terminal profile are created only when the distribution is
+registered, and only for the user who registered it. Neither is needed —
+`wsl -d Ubuntu-24.04` opens the same shell — but a missing entry tells where
+the installation stopped:
+
+```powershell
+wsl --version         # "not installed"               -> step 1 did not complete
+wsl --list --verbose  # "no installed distributions"  -> run step 2 again
+```
 
 > **Performance tip:** Ensure you clone the repository inside the native Linux file system (for example, in your home `~/Projects/`) and not on the Windows drive (under `/mnt/c/`). Linux file operations are significantly faster if they stay within the WSL2 virtual disk.
 
