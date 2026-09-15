@@ -2,6 +2,12 @@
 
 The **ansible-win_edulab** project manages a didactic computer lab consisting of a Domain Controller on Debian and Windows 11 workstations.
 
+Everything runs from a **Linux control node** — Ansible, the MCP servers, and the
+QEMU/KVM test VMs that the playbooks in `tests/` revert and start through
+`virsh`. A Windows control node under WSL2 is supported for compatibility, with
+the test environment unavailable; see
+[Installation](installation.md#preparing-the-control-node).
+
 ## Architecture
 
 The automation is based on Ansible and two dedicated collections:
@@ -58,6 +64,7 @@ The organization of files and folders within the project is as follows:
 ├── docs/                               # Project documentation
 │   ├── mcp.md                          # MCP server full documentation
 │   ├── installation.md                 # Setup and requirements
+│   ├── test-vms.md                     # Building the QEMU/KVM test VMs (and their licensing)
 │   ├── playbooks.md                    # Available playbooks
 │   ├── architecture.md                 # Project structure and layout
 │   └── claude_code.md                  # Claude Code integration details
