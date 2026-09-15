@@ -18,7 +18,14 @@ tests/
 
 ## Test environment
 
-Test VMs are managed on QEMU/KVM from the local host.
+Test VMs are managed on QEMU/KVM from the local host, i.e. from the Linux
+control node itself: this is the reference setup of the project, and the test
+playbooks cannot be used from a Windows control node under WSL2. The libvirt
+packages required are listed in
+[`docs/installation.md`](../docs/installation.md#preparing-the-control-node), and
+[`docs/test-vms.md`](../docs/test-vms.md) covers building the VMs themselves:
+ISO download links, `virt-install` options, the `baseline` snapshot, and the
+evaluation licence the Windows images are used under.
 
 `virsh.yaml` resolves inventory targets to KVM VM names via its internal `vm_map`.
 
@@ -43,7 +50,9 @@ and no additional software installed.
 Every test playbook follows the same pattern:
 
 1. Revert the VM to the `baseline` snapshot via `virsh.yaml`
-2. Wake the VM via `playbooks/wol.yaml`
+2. Wake the VM via `playbooks/wol.yaml` — the magic packet reaches the VM through
+   [`virsh_wakeonlan`](https://github.com/lineadicomando/virsh_wakeonlan), the
+   systemd listener that starts the matching libvirt domain
 3. Run the role or task sequence under test
 
 Steps 1 and 2 are embedded in every test playbook, so running a test directly is

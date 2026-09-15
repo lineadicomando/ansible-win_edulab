@@ -6,10 +6,20 @@ This guide outlines the requirements and steps necessary to configure an EduLab 
 
 ### Control node
 
+The reference control node is a **Linux** machine — the project is developed and
+run on Debian 13 and Fedora, and any current distribution is suitable. A Windows
+control node is supported through WSL2 for compatibility, but it is not the
+platform the project targets: see
+[Preparing the Control Node](#preparing-the-control-node).
+
+- **Linux** (Debian 13, Fedora, or an equivalent current distribution)
 - **Ansible** >= 2.20 (the win_workman roles declare `min_ansible_version: "2.20"`)
 - **Git**
 - **Python** >= 3.11 (only required for the MCP servers)
+- **sshpass**, when the managed hosts are reached with password authentication
 - An **SSH key** for connecting to the managed hosts (see `inventories/school/group_vars/all/vars.yaml`)
+- **QEMU/KVM with libvirt** — recommended, and required to run the test playbooks
+  in `tests/`, which drive the test VMs locally via `virsh`
 
 ### Managed hosts
 
@@ -18,11 +28,98 @@ This guide outlines the requirements and steps necessary to configure an EduLab 
 
 ---
 
-## Preparing the Control Node (Windows 11 via WSL2)
+## Preparing the Control Node
 
-If the computer you intend to run Ansible commands from (the *Control Node*) is a Windows 11 machine, the recommended and most reliable way to run Ansible is via **WSL2** (Windows Subsystem for Linux).
+The *Control Node* is the machine Ansible commands are run from. This project
+assumes it runs **Linux**, which is also where the MCP servers and the QEMU/KVM
+test VMs live. The WSL2 path documented afterwards exists only so the project
+can be used where the control node has to be a Windows machine.
 
-### 1. Install WSL2 and Ubuntu
+### Linux (reference platform)
+
+#### 1. Install the base packages
+
+Debian / Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-pip python3-venv sshpass
+```
+
+Fedora:
+
+```bash
+sudo dnf install -y git python3 python3-pip sshpass
+```
+
+#### 2. Install Ansible >= 2.20
+
+The version required here is newer than the one packaged by most distributions,
+so install Ansible from PyPI — `pipx` keeps it isolated from the system Python:
+
+```bash
+sudo apt install -y pipx      # Debian/Ubuntu
+sudo dnf install -y pipx      # Fedora
+
+pipx install --include-deps ansible
+```
+
+Check that the result satisfies the requirement:
+
+```bash
+ansible --version   # must report core 2.20 or newer
+```
+
+#### 3. Install QEMU/KVM for the test VMs (recommended)
+
+The playbooks in `tests/` revert and start the lab VMs on the control node
+itself through `virsh` (see `tests/virsh.yaml` and
+[`tests/README.md`](../tests/README.md)), so a libvirt/QEMU host is what the
+test workflow is built around.
+
+Debian / Ubuntu:
+
+```bash
+sudo apt install -y qemu-system-x86 libvirt-daemon-system libvirt-clients virt-manager
+```
+
+Fedora:
+
+```bash
+sudo dnf install -y @virtualization virt-manager
+```
+
+Then enable the daemon and grant the current user access to the system libvirt
+instance (log out and back in for the group to take effect):
+
+```bash
+sudo systemctl enable --now libvirtd
+sudo usermod -aG libvirt "$USER"
+```
+
+The test playbooks wake their targets with Wake-on-LAN, like they do with real
+workstations, so the host also runs
+[`virsh_wakeonlan`](https://github.com/lineadicomando/virsh_wakeonlan) — a
+systemd listener that turns the magic packet into a `virsh start` on the
+matching domain.
+
+The VM names and the `baseline` snapshot expected by the test playbooks are
+documented in [`tests/README.md`](../tests/README.md), while
+[Test VMs (QEMU/KVM)](test-vms.md) walks through building them from scratch —
+including where to download the Windows evaluation ISO and the licence terms
+that come with it.
+
+### Windows 11 via WSL2 (compatibility)
+
+> **Note:** this path is provided for compatibility, not as the recommended
+> setup. Ansible has no native Windows control node, so it runs inside a Linux
+> distribution under WSL2 anyway; on top of that, the QEMU/KVM test
+> environment in `tests/` is not available from WSL2, so the test playbooks
+> cannot be used from a Windows control node.
+
+If the computer you intend to run Ansible commands from is a Windows 11 machine, the most reliable way to run Ansible is via **WSL2** (Windows Subsystem for Linux).
+
+#### 1. Install WSL2 and Ubuntu
 
 Open PowerShell as an Administrator and run:
 ```powershell
@@ -30,15 +127,20 @@ wsl --install
 ```
 This command will enable the necessary features and install the default Ubuntu distribution. When it finishes, restart your computer if prompted by the system.
 
-### 2. Configure the Linux environment
+#### 2. Configure the Linux environment
 
 Once restarted, open the **Ubuntu** app from the Start menu and complete the initial setup by creating a UNIX username and password. After that, update the system and install the required packages:
 
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y ansible git python3-pip python3-venv sshpass
+sudo apt install -y git python3-pip python3-venv sshpass pipx
+pipx install --include-deps ansible
 ```
+
+Ansible is installed with `pipx` here for the same reason as on a Linux control
+node: the `ansible` package shipped by the distribution is usually older than
+the 2.20 required by the roles.
 
 From this point on, you can clone the repository and run playbooks directly from the Ubuntu terminal.
 

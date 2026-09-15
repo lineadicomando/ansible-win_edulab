@@ -3,6 +3,11 @@
 Ansible project for managing a didactic computer lab: a Samba 4 Active
 Directory Domain Controller on Debian and Windows 11 workstations.
 
+The control node is a **Linux** machine (Debian, Fedora, or an equivalent
+current distribution), preferably with **QEMU/KVM** available for the test VMs
+used by the playbooks in `tests/`. Running the control node on Windows through
+WSL2 is documented as a compatibility option, not as the reference setup.
+
 Three **MCP servers** (Model Context Protocol) expose lab operations to Claude
 Code, enabling natural-language management of workstations directly from the AI
 assistant. A set of **Claude Code skills** embedded in the project assists in
@@ -21,7 +26,11 @@ both are first-class features of the project alongside the Ansible automation.
 The complete documentation for the project is divided into thematic sections in the `docs/` folder:
 
 - **[Installation and Initial Setup](docs/installation.md)**
-  Requirements, Windows 11 Pro preparation, and Getting Started instructions for the lab setup.
+  Requirements, Linux control node preparation (plus the WSL2 fallback), Windows 11 Pro
+  host preparation, and Getting Started instructions for the lab setup.
+- **[Test VMs (QEMU/KVM)](docs/test-vms.md)**
+  How to build the Windows and Debian test VMs, with the download links and the
+  licensing terms that apply to the Windows evaluation images.
 - **[Available Playbooks](docs/playbooks.md)**
   Details, default targets, and usage examples for all available playbooks.
 - **[Architecture and Project Structure](docs/architecture.md)**
