@@ -113,6 +113,38 @@ and `files` are present only in the 56 that actually install something — actio
 
 ---
 
+## The `usr` block (per-user deferred install)
+
+The blocks declare the install scopes: `package` = `sys` (machine-wide, now), `usr` =
+per-user at logon. A schema may carry both; `zed` has only `usr`. Consumed by
+`pkg_utils/tasks/pkg_act_usr.yaml` (builds `win_workman_usr_policy_base` from it).
+
+```yaml
+win_workman_zed_schema:
+  name: Zed
+  role: lineadicomando.win_workman.zed      # required: its last segment names the policy file
+  default_action: usr                       # usr-only schema; a dual one keeps !!str on
+  usr:
+    setup_file: Zed-x86_64-1.19.2.exe       # must equal a files[].filename that has a sha256 checksum
+    version: "1.19.2"                       # compared with the HKCU DisplayVersion; never downgrades
+    uninstall_key: "{2DB0DA96-CA55-49BB-AF4F-64AF36A86712}_is1"   # key name under HKCU\…\Uninstall
+    install_args: [/VERYSILENT, /SUPPRESSMSGBOXES, /NORESTART]
+    uninstall_args: [/VERYSILENT, /SUPPRESSMSGBOXES, /NORESTART]
+    success_exit_codes: [0]                 # optional
+    timeout: 900                            # optional, seconds (default win_workman_usr_timeout)
+  files:
+    - filename: Zed-x86_64-1.19.2.exe       # versioned name even when the upstream asset is not
+      url: https://github.com/zed-industries/zed/releases/download/v1.19.2/Zed-x86_64.exe
+      checksum: sha256:dd8fd2b2…
+```
+
+- No `searchName`, `provider`, `shortcuts`: the installer runs as the user and does its own.
+- `uninstall_key` is how the agent detects the install and finds `UninstallString`; get it
+  from a manual install: `Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall`.
+- Missing sha256 or `uninstall_key` fails *Validate usr schema* before touching the host.
+
+---
+
 ## Package providers
 
 ### `registry` (default)

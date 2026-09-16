@@ -1,0 +1,64 @@
+---
+# Domain accounts for tests that need real users: per-user installs, logon
+# behaviour, group-based rules. Imported by samba_dc.yaml after the DC is
+# built, and runnable on its own against a DC that is already up:
+#   ansible-playbook tests/samba_dc_users.yaml
+#
+# User names carry dashes on purpose, since win_workman task strings split on
+# '-'. The password is the lab one from the vault, so nothing is written here
+# in clear; an existing account keeps its password, which is set on creation
+# only.
+- name: Create domain test users
+  hosts: "{{ target_hosts | default('samba_dc') }}"
+  become: true
+  gather_facts: false
+  vars:
+    samba_dc_test_password: "{{ ansible_vault_password }}"
+    samba_dc_test_groups:
+      - name: Students
+        members:
+          - student-alice
+          - student-bob
+      - name: Teachers
+        members:
+          - teacher-carol
+  tasks:
+    - name: Ensure test users
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: user
+        samba_tool_action: present
+        samba_tool_args:
+          name: "{{ samba_dc_test_user }}"
+          password: "{{ samba_dc_test_password }}"
+      loop: "{{ samba_dc_test_groups | map(attribute='members') | flatten | unique }}"
+      loop_control:
+        loop_var: samba_dc_test_user
+
+    - name: Ensure test groups
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: group
+        samba_tool_action: create
+        samba_tool_args:
+          name: "{{ samba_dc_test_group.name }}"
+      loop: "{{ samba_dc_test_groups }}"
+      loop_control:
+        loop_var: samba_dc_test_group
+        label: "{{ samba_dc_test_group.name }}"
+
+    - name: Ensure test group members
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: group
+        samba_tool_action: addmembers
+        samba_tool_args:
+          name: "{{ samba_dc_test_group.name }}"
+          members: "{{ samba_dc_test_group.members }}"
+      loop: "{{ samba_dc_test_groups }}"
+      loop_control:
+        loop_var: samba_dc_test_group
+        label: "{{ samba_dc_test_group.name }}"

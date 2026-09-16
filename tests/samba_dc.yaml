@@ -16,5 +16,8 @@
 - name: Build Samba AD DC
   ansible.builtin.import_playbook: ../playbooks/samba_dc_build.yaml
 
+- name: Create domain test users
+  ansible.builtin.import_playbook: samba_dc_users.yaml
+
 - name: Join Samba AD DC
   ansible.builtin.import_playbook: ../playbooks/samba_dc_join.yaml

@@ -133,6 +133,16 @@ win_workman_<schema>_schema:
       checksum: "{{ win_workman_<schema>_checksum[win_workman_<schema>_arch] }}"
 ```
 
+### Per-user role (installer that only installs into the calling user's profile)
+
+Symptom: run elevated over SSH it lands in `C:\Users\maint\AppData\Local\Programs` with an
+HKCU uninstall key (Inno Setup `PrivilegesRequired=lowest`, many Electron apps). Give the
+schema a `usr` block instead of (or besides) `package`, and `default_action: usr` if it has
+no `package`. Field reference: **win-workman-schema**, section *The `usr` block*. `zed` is
+the worked example; `tasks/main.yaml` is the simple dispatcher below, unchanged. In
+`meta/mcp.yaml` write a `notes` line saying it is per-user (`install_scopes` is derived
+automatically by the MCP server).
+
 ---
 
 ## Step 2 — tasks/main.yaml
@@ -328,3 +338,4 @@ For the full list of `schema.package` fields and what each one does, see
 - [ ] `docs/index.md` — role added to catalog table
 - [ ] Checksum verified (`sha256sum <installer>`)
 - [ ] `searchName` matches actual Windows registry `DisplayName`
+- [ ] per-user role: `usr.uninstall_key` read from HKCU after a manual install, `setup_file` matches a `files` entry with sha256, tested with a copy of `tests/usr_zed.yaml`

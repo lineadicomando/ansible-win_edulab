@@ -170,7 +170,7 @@ Probed values, not assumptions. `sidecar` = a digest file next to the installer.
 
 | Vendor / roles | Version source | sha256 without downloading |
 |---|---|---|
-| GitHub releases — `dbeaver`, `embarcadero_devcpp`, `git`, `laragon`, `netbeans`, `notepadpp`, `ntop`, `peazip`, `powertoys`, `rustdesk`, `seb`, `tinycad`, `veyon`, `windirstat`, `winfsp`, `winmerge` | `/releases/latest` or the API `tags` endpoint | **yes** — asset `digest` field in the API |
+| GitHub releases — `dbeaver`, `embarcadero_devcpp`, `git`, `laragon`, `netbeans`, `notepadpp`, `ntop`, `peazip`, `powertoys`, `rustdesk`, `seb`, `tinycad`, `veyon`, `windirstat`, `winfsp`, `winmerge`, `zed` | `/releases/latest` or the API `tags` endpoint | **yes** — asset `digest` field in the API |
 | Visual Studio Code — `vscode` | `update.code.visualstudio.com/api/update/win32-x64/stable/latest` | **yes** — the same JSON carries `productVersion`, `url` and `sha256hash` |
 | Mozilla — `firefox` | `download-installer.cdn.mozilla.net/pub/firefox/releases/` | **yes** — `<version>/SHA256SUMS` (HTTP 200 confirmed) |
 | Python — `python31x` | `python.org/ftp/python/` directory listing | no sidecar (`.sha256` → 404); the release page publishes an md5, so download and hash |
@@ -179,6 +179,11 @@ Probed values, not assumptions. `sidecar` = a digest file next to the installer.
 | LibreOffice | mirror directory listing | no (`.sha256sum` → 404) |
 | Evergreen "latest" URLs — `chrome`, `edge`, `gcpw`, `googledrive`, `vcredist14`, `brave`, `postman` | URL carries no version; read the shipped version from the vendor's release notes, or install and check `info` | n/a — the file behind the stable URL changes silently. `chrome` omits `checksum` for this reason; `edge` keeps one and needs a re-hash at every bump |
 | Autodesk — `autocadlt2026` | download portal, per-locale URLs | no — these are multi-part archives, hash each part |
+
+`zed` is a `usr` schema: bump `usr.setup_file`, `usr.version`, `files[0].filename`
+(keep the version in it: the upstream asset is always `Zed-x86_64.exe`), `url` and
+`checksum`; `usr.uninstall_key` does not change. A `usr-on` on hosts stages the new version,
+removes the old payload, and users upgrade at next logon.
 
 For an MSI where the bump also needs a new `ProductCode`, extract it with
 `python3` + `olefile` (no msitools on this machine).
