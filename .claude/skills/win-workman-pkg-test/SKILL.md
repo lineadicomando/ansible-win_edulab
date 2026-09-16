@@ -195,6 +195,28 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
 
 ---
 
+## Testing a per-user (`usr`) role
+
+`tests/usr_zed.yaml` is the template: it imports `tests/samba_dc.yaml` (baseline revert of DC
+and `lab_win`, DC build, test users from `tests/samba_dc_users.yaml`, domain join), then on one
+host asserts every step: policy targets/kinds → autologon of `SCHOOL\student-alice` with
+restart → agent log `end exit=0` → `usr-info` → `usr-off` + `usr-apply` → `usr-purge` +
+`autologon-off` → nothing left on disk. Copy it and change the schema name.
+
+- Test users: `student-alice`, `student-bob` (group `Students`), `teacher-carol` (`Teachers`),
+  password `ansible_vault_password`.
+- Run it in the background (Bash `run_in_background`, output to `logs/`): the DC build plus
+  a first domain logon take long.
+- Expected slowness, not bugs: a first domain logon can take ~5 min before the installer
+  finishes; each `win_powershell` task costs 10-20 s on the domain-joined VMs.
+- Asserting on `DOMAIN\user` names: a backslash literal in Jinja stays doubled
+  (`"\\"` → `\\`), so compare with a regex instead —
+  `selectattr('user', 'match', '(?i)^' ~ domain ~ '.' ~ user ~ '$')`.
+- Only interactive logons trigger the agent; `usr-apply` needs the user logged on
+  (explorer.exe owner). Leave autologon off at the end: it stores the password.
+
+---
+
 ## Troubleshooting
 
 - **`is_present` fails unexpectedly after `on`** — check `product_id` / `detect_display_name`

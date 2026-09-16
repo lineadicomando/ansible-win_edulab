@@ -1,8 +1,9 @@
 # Tests
 
 This directory contains playbooks for testing roles and configurations.
-Site-specific playbooks (AD users, lab-specific configurations) do not belong
-here — they go in `local/` (gitignored).
+Site-specific playbooks (real AD users, lab-specific configurations) do not
+belong here — they go in `local/` (gitignored). The fictitious test accounts
+created by `samba_dc_users.yaml` are part of the test environment and stay here.
 
 ## Structure
 
@@ -10,6 +11,9 @@ here — they go in `local/` (gitignored).
 tests/
   virsh.yaml           # Utility: VM management via virsh (revert, start, shutdown, ...)
   revert_baseline.yaml # Utility: revert to baseline + wake for arbitrary target (var t)
+  samba_dc.yaml        # Samba AD DC build, test users, domain join of lab_win
+  samba_dc_users.yaml  # Domain test users and groups (imported by samba_dc.yaml)
+  usr_zed.yaml         # Per-user deferred install (usr action) with domain users, on zed
   lab_cad.yaml         # CAD lab deployment test
   lab_coding.yaml      # Coding lab deployment test
   seb_classroom.yaml   # SEB classroom deployment test
@@ -44,6 +48,27 @@ and no additional software installed.
 
 > **Note:** `virsh.yaml` uses `become: true` — the user running the playbook must have
 > sudo privileges on the local host.
+
+## Domain test users
+
+`samba_dc_users.yaml` creates these accounts on the DC, with the lab password
+from the vault (`ansible_vault_password`). `samba_dc.yaml` imports it right
+after building the DC; it also runs on its own against a DC that is already
+up, without reverting anything:
+
+```bash
+ansible-playbook tests/samba_dc_users.yaml
+```
+
+| Account | Group |
+|---|---|
+| `student-alice`, `student-bob` | `Students` |
+| `teacher-carol` | `Teachers` |
+
+User names carry dashes on purpose: win_workman task strings split on `-`, and
+the per-user install (`<role>-usr-<verb>-<targets>`) must keep them intact. The
+playbook is idempotent; an existing account keeps its password, which is set on
+creation only.
 
 ## How tests work
 

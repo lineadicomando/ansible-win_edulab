@@ -21,7 +21,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 
 | Tool | When to use |
 |------|-------------|
-| `get_role_info` | When the role has custom actions or configurable defaults; returns display_name, custom_actions, defaults, notes |
+| `get_role_info` | When the role has custom actions or configurable defaults; returns display_name, custom_actions, defaults, notes, and for package roles `install_scopes` (`sys`/`usr`) plus `usr_actions` for per-user roles |
 | `run_tasks` | Install/remove software, run operations on hosts/groups via the `lineadicomando.win_workman.win_workman` FQCN playbook |
 | `run_status`, `wait_run` | Same as on the win-edulab server, for runs started by `run_tasks` |
 
@@ -176,7 +176,10 @@ Not needed for standard roles without custom actions (e.g. `vlc`, `git`, `python
 - System operations (restart, shutdown, logoff, wu, sfc, wim, chkdsk)
 - Configuration (lock, autologon, wallpaper, ms_account, widgets, oobe)
 
-`run_tasks` accepts **no extra vars** (`e` is not a supported parameter). Role behaviour is controlled only via the task string (action + positional argument).
+`run_tasks` takes role variables in `extra_vars` (an object, passed as Ansible extra vars);
+`t` and `ansible_*` keys are refused. Prefer the task string (action + positional argument)
+when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather than
+`extra_vars: {"win_workman_usr_targets": [...]}`.
 
 **run_playbook** — for standalone playbooks with their own logic:
 
@@ -292,6 +295,17 @@ Restore args: `restore_backup_file`, `restore_targetdir`, `restore_newservername
 ### Remove browsers from a specific host
 ```json
 { "t": ["firefox-off", "chrome-off"], "l": "PC01", "inventory": "ario_info", "preview": true }
+```
+
+### Per-user install (deferred to logon) for a group, minus one user
+```json
+{ "t": ["zed-usr-on-Students", "zed-usr-off-student-bob"], "l": "lab_coding", "preview": true }
+```
+Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has it.
+
+### Per-user install targets with spaces, via extra_vars
+```json
+{ "t": ["zed-usr-on"], "l": "teacher", "extra_vars": { "win_workman_usr_targets": ["Domain Users"] }, "preview": true }
 ```
 
 ### Enable autologon with role defaults

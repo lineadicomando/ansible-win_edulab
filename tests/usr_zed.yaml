@@ -1,0 +1,157 @@
+---
+# Lifecycle test for the per-user deferred install (usr action), on the zed role,
+# with domain users.
+#
+#   ansible-playbook tests/usr_zed.yaml
+#   ansible-playbook tests/usr_zed.yaml -e vm_host=student01
+#
+# Builds the domain environment first (samba_dc.yaml: baseline revert, DC,
+# test users, join), then on one host:
+#   1. policy: Students present, student-bob absent (user rule beats group)
+#   2. first logon of student-alice, who never logged on: installs at logon
+#   3. usr-info: alice installed, bob excluded and never installed
+#   4. usr-off + usr-apply for alice while logged on: uninstalls now
+#   5. usr-purge and autologon off: nothing left on disk
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Build domain environment
+  ansible.builtin.import_playbook: samba_dc.yaml
+
+- name: Per-user install lifecycle - zed
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    usr_test_domain: "{{ samba_dc_build_domain }}"
+    usr_test_user: student-alice
+    usr_test_excluded: student-bob
+    usr_test_group: Students
+  tasks:
+    - name: Policy for the group, with one member excluded
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "zed-usr-on-{{ usr_test_group }}"
+          - "zed-usr-on-{{ usr_test_group }}"
+          - "zed-usr-off-{{ usr_test_excluded }}"
+
+    - name: Assert the policy targets and their kinds
+      ansible.builtin.assert:
+        that:
+          - _targets | selectattr('name', 'equalto', usr_test_group)
+            | selectattr('kind', 'equalto', 'group') | selectattr('state', 'equalto', 'present') | list | length == 1
+          - _targets | selectattr('name', 'equalto', usr_test_excluded)
+            | selectattr('kind', 'equalto', 'user') | selectattr('state', 'equalto', 'absent') | list | length == 1
+      vars:
+        _targets: "{{ win_workman_usr_policy_result.result.policy.targets }}"
+
+    - name: Log on as {{ usr_test_user }}
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autologon_user: "{{ usr_test_domain }}\\{{ usr_test_user }}"
+        win_workman_autologon_password: "{{ ansible_vault_password }}"
+        win_workman_autologon_restart: true
+        win_workman_tasks:
+          - autologon-on
+
+    # The agent runs asynchronously after logon; a first domain logon on these
+    # VMs can take several minutes before the installer even starts.
+    - name: Wait for the agent to finish in the session of {{ usr_test_user }}
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$User, [int]$TimeoutSec)
+          $deadline = (Get-Date).AddSeconds($TimeoutSec)
+          $log = $null
+          do {
+            $log = Get-ChildItem C:\Users -Directory -Filter "$User*" -ErrorAction SilentlyContinue |
+              ForEach-Object { Join-Path $_.FullName 'AppData\Local\win_workman\usr-agent.log' } |
+              Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            if ($log -and (Select-String -LiteralPath $log -Pattern '\bend exit=' -Quiet)) { break }
+            Start-Sleep -Seconds 10
+          } while ((Get-Date) -lt $deadline)
+          $Ansible.Changed = $false
+          $Ansible.Result = @{ log = $log; lines = @(if ($log) { Get-Content -LiteralPath $log }) }
+          if (-not $log -or -not (Select-String -LiteralPath $log -Pattern '\bend exit=0' -Quiet)) {
+            $Ansible.Failed = $true
+          }
+        parameters:
+          User: "{{ usr_test_user }}"
+          TimeoutSec: 900
+      register: usr_test_agent
+
+    - name: Read per-user install state
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - zed-usr-info
+
+    - name: Assert installed for the group member, not for the excluded user
+      ansible.builtin.assert:
+        that:
+          - _alice | length == 1
+          - _alice[0].logged_on | bool
+          - _alice[0].installed_version is not none
+          - _alice[0].receipt.Result == 'ok'
+          - _bob | selectattr('installed_version', 'ne', none) | list | length == 0
+      vars:
+        _users: "{{ win_workman_usr_info.result.users }}"
+        # DOMAIN\user without writing a backslash: Jinja keeps "\\" doubled.
+        _alice: "{{ _users | selectattr('user', 'match', '(?i)^' ~ usr_test_domain ~ '.' ~ usr_test_user ~ '$') | list }}"
+        _bob: "{{ _users | selectattr('sid', 'in', _bob_sids) | list }}"
+        _bob_sids: >-
+          {{ win_workman_usr_info.result.policy.targets
+             | selectattr('name', 'equalto', usr_test_excluded) | map(attribute='sid') | list }}
+
+    - name: Remove it now for the logged-on user
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "zed-usr-off-{{ usr_test_user }}"
+          - "zed-usr-apply-{{ usr_test_user }}"
+
+    - name: Assert the on-demand uninstall
+      ansible.builtin.assert:
+        that:
+          - _outcome | length == 1
+          - _outcome[0].finished | bool
+          - _outcome[0].outcome.State == 'absent'
+          - _outcome[0].outcome.Changed == 'True'
+      vars:
+        _outcome: "{{ win_workman_usr_apply_result.result.users | selectattr('targeted') | list }}"
+
+    - name: Purge the policy and disable autologon
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - zed-usr-purge
+          - zed-usr-purge
+          - autologon-off
+
+    - name: Check that nothing is left on disk
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$User)
+          $Ansible.Changed = $false
+          $Ansible.Result = [ordered]@{
+            usr_tree = Test-Path -LiteralPath C:\ProgramData\win_workman
+            agent_task = $null -ne (Get-ScheduledTask -TaskPath '\win_workman\' -TaskName usr-agent -ErrorAction SilentlyContinue)
+            zed_dirs = @(Get-ChildItem C:\Users\*\AppData\Local\Programs\Zed -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
+            loaded_probe_hives = @(Get-ChildItem Registry::HKEY_USERS | Where-Object Name -like '*wm_usr*' | ForEach-Object Name)
+            autologon_password = $null -ne (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword
+          }
+        parameters:
+          User: "{{ usr_test_user }}"
+      register: usr_test_leftovers
+
+    - name: Assert a clean host
+      ansible.builtin.assert:
+        that:
+          - not usr_test_leftovers.result.usr_tree
+          - not usr_test_leftovers.result.agent_task
+          - usr_test_leftovers.result.zed_dirs | length == 0
+          - usr_test_leftovers.result.loaded_probe_hives | length == 0
+          - not usr_test_leftovers.result.autologon_password

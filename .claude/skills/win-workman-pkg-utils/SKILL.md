@@ -55,9 +55,43 @@ Routes `win_workman_action` to:
 | `info` | `pkg_act_info` |
 | `shortcuts` | `pkg_act_shortcuts` |
 | `is_present` | `pkg_act_is_present` |
+| `usr` | `pkg_act_usr` → `pkg_usr_<verb>` (per-user deferred install) |
 
 The accepted set is `win_workman_pkg_actions` in `pkg_utils/vars/main.yaml`; anything else
 fails with *Unknown action*, listing the valid values.
+
+Before routing, *Validate install scope* refuses `usr` on a schema without a `usr` block
+and every other action except `download` on a schema that has only a `usr` block.
+
+---
+
+## Per-user deferred install (`usr`) — file map
+
+Read this instead of the files; the collection doc `docs/roles/core/pkg_utils.md`
+(section *Per-user deferred install*) has the design rationale.
+
+| File | Role |
+|---|---|
+| `tasks/pkg_act_usr.yaml` | parse verb/targets from `win_workman_task_argv`, validate, build `win_workman_usr_policy_base`, include `pkg_usr_<verb>` |
+| `tasks/pkg_usr_stage.yaml` | dir tree + ACL (Users RX only), copy agent, register `\win_workman\usr-agent` task (principal `S-1-5-32-545`, AtLogOn, Parallel) |
+| `tasks/pkg_usr_policy.yaml` | merge targets into `policies\<schema>.json`; names → SID, kind via `LookupAccountSid` |
+| `tasks/pkg_usr_on.yaml` | download → stage → payload copy → policy `present` → prune other versions |
+| `tasks/pkg_usr_off.yaml` | stage → policy `absent` (all entries when no targets) |
+| `tasks/pkg_usr_info.yaml` | per profile: HKU or `reg load` of NTUSER.DAT, uninstall key + receipt |
+| `tasks/pkg_usr_apply.yaml` | `Start-ScheduledTask`, wait on `HKU\<sid>\Software\win_workman\usr\LastRun` |
+| `tasks/pkg_usr_purge.yaml` | remove policy + payload; last policy → remove task and tree |
+| `files/usr_agent.ps1` | runs as the user: per policy install/upgrade/uninstall, writes receipt |
+
+- Host layout: `C:\ProgramData\win_workman\usr\{agent.ps1, policies\, payload\<schema>\<version>\}`.
+- Receipt per user: `HKCU\Software\win_workman\usr\<schema>` (`State`, `Result`, `Changed`,
+  `Version`, `Message`, `Timestamp` UTC) + `LastRun` on the parent key; log in
+  `%LOCALAPPDATA%\win_workman\usr-agent.log`.
+- Registered facts: `win_workman_usr_policy_result`, `win_workman_usr_info`,
+  `win_workman_usr_apply_result`, `win_workman_usr_purge_result` (all `.result`).
+- Vars: `win_workman_usr_path`, `win_workman_usr_targets` (`[BUILTIN\Users]`),
+  `win_workman_usr_timeout`, `win_workman_usr_apply_timeout` (defaults);
+  `win_workman_usr_verbs`, `win_workman_usr_target_pattern`, `win_workman_usr_task_path/name` (vars).
+- `win_powershell` results with nested objects need `depth: 5`; the default 2 returns type names.
 
 ---
 

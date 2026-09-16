@@ -100,8 +100,33 @@ win_workman_some_arg: "{{ win_workman_task_argv[2] | default('default_value') }}
 | `shortcuts` | Re-create the schema shortcuts on an already installed package, without re-running the install |
 | `is_present` | Fail if software is not installed |
 
+| `usr` | Per-user deferred install — see below |
+
 This list is `win_workman_pkg_actions` in `pkg_utils/vars/main.yaml`; `pkg_workflow` fails
 with *Unknown action* for anything else, listing the valid set in the message.
+
+### Per-user deferred install: `<schema>-usr-<verb>[-<target>[+<target>…]]`
+
+Only for schemas with a `usr` block (`get_role_info` → `install_scopes` contains `usr`;
+today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one refuses `usr`.
+
+| Verb | Effect |
+|---|---|
+| `on` *(default)* | stage installer, mark targets `present` — installs at each target's next logon |
+| `off` | mark targets `absent` (no targets: every target of the policy) — uninstalls at next logon |
+| `info` | policy + per-profile installed version and last agent outcome |
+| `apply` | run the agent now for logged-on users, wait, report |
+| `purge` | remove policy + staged installer (no targets allowed; installed copies stay) |
+
+- Targets: user or group names, `DOMAIN\name`, or SIDs, joined by **`+`**. Everything after
+  the verb is rejoined on `-` first, so `zed-usr-on-student-alice+student-bob` gives
+  `[student-alice, student-bob]`. Never `,` (it splits tasks in `t`).
+- No targets on `on` → `win_workman_usr_targets` (default `BUILTIN\Users`).
+- `on`/`off` **merge** into the policy: `zed-usr-on` then `zed-usr-off-student-bob` = everyone
+  but bob. A user entry beats group entries; among groups, `absent` wins.
+- `zed` alone = `zed-usr-on` (the schema's `default_action` is `usr`).
+- Parsing lives in `pkg_utils/tasks/pkg_act_usr.yaml`; full reference in the collection's
+  `docs/roles/core/pkg_utils.md#per-user-deferred-install-usr`.
 
 ---
 
