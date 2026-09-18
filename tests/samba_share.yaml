@@ -1,0 +1,272 @@
+---
+# Lifecycle test for shared folders (samba_tool object "share", the
+# samba_share module), against a DC that is up and a domain-joined Windows host.
+#
+#   ansible-playbook tests/samba_share.yaml
+#   ansible-playbook tests/samba_share.yaml -e vm_host=student01
+#
+# Uses the domain test users (tests/samba_dc_users.yaml): teacher-carol in
+# Teachers, student-alice in Students. Imported by samba_dc.yaml; alice never
+# logs on and gets no profile here, because usr_zed.yaml needs her first
+# logon. Then:
+#   1. create: Teachers read-write, Students read-only, mapped as a drive;
+#      a second run changes nothing
+#   2. over SMB, carol writes and alice only reads
+#   3. at carol's logon the GPO maps the drive
+#   4. revoke Students: alice is refused
+#   5. delete with its data: no share, no mapping, no folder left
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Domain test users
+  ansible.builtin.import_playbook: samba_dc_users.yaml
+
+- name: Shared folder lifecycle - DC side
+  hosts: "{{ target_hosts | default('samba_dc') }}"
+  become: true
+  gather_facts: false
+  vars:
+    share_test_letter: T
+  tasks:
+    # A name of its own for every run: Windows clients that still hold an idle
+    # connection to a deleted share fail to list a new share of the same name
+    # ("The parameter is incorrect") until that connection drops.
+    - name: Pick the share name for this run
+      ansible.builtin.set_fact:
+        share_test_name: "ShareTest{{ lookup('ansible.builtin.pipe', 'date +%s') }}"
+
+    - name: Create the shared folder
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: share
+        samba_tool_action: create
+        samba_tool_args: &share_test_args
+          name: "{{ share_test_name }}"
+          comment: samba_share lifecycle test
+          write: [Teachers]
+          read: [Students]
+          drive_letter: "{{ share_test_letter }}"
+
+    - name: Assert the share was created
+      ansible.builtin.assert:
+        that:
+          - samba_tool_result is changed
+          - samba_tool_result.share.drive.letter == share_test_letter
+          - samba_tool_result.share.access | length == 2
+
+    - name: Create it again
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: share
+        samba_tool_action: create
+        samba_tool_args: *share_test_args
+
+    - name: Assert the second run changed nothing
+      ansible.builtin.assert:
+        that: samba_tool_result is not changed
+
+    - name: Read the DC NetBIOS name, the server part of the share path
+      ansible.builtin.command:
+        argv: [testparm, -s, --parameter-name=netbios name]
+      register: share_test_netbios
+      changed_when: false
+
+- name: Shared folder lifecycle - Windows side
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    share_test_domain: "{{ samba_dc_build_domain }}"
+    share_test_dc: "{{ groups['samba_dc'] | first }}"
+    share_test_name: "{{ hostvars[share_test_dc].share_test_name }}"
+    share_test_unc: "\\\\{{ hostvars[share_test_dc].share_test_netbios.stdout | trim }}\\{{ share_test_name }}"
+    # Run with a domain user's credentials for network access only (runas
+    # /netonly): each become has its own SMB credentials, and the user neither
+    # logs on locally nor gets a profile. whoami still reports the local user.
+    share_test_probe: &share_test_probe |
+      param([string]$Path)
+      $r = [ordered]@{ user = (whoami); can_list = $false; can_write = $false; error = $null }
+      try {
+        $null = Get-ChildItem -LiteralPath $Path -ErrorAction Stop
+        $r.can_list = $true
+        Set-Content -LiteralPath (Join-Path $Path "$env:USERNAME.txt") -Value 'probe' -ErrorAction Stop
+        $r.can_write = $true
+      } catch {
+        $r.error = $_.Exception.Message
+      }
+      $Ansible.Changed = $false
+      $Ansible.Result = $r
+  tasks:
+    # Start without the interactive session an interrupted run may leave.
+    - name: Log off interactive sessions
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - logoff-on
+
+    - name: Access as teacher-carol (Teachers, read-write)
+      ansible.windows.win_powershell:
+        script: "{{ share_test_probe }}"
+        parameters:
+          Path: "{{ share_test_unc }}"
+      become: true
+      become_method: ansible.builtin.runas
+      become_flags: logon_type=new_credentials logon_flags=netcredentials_only
+      become_user: "{{ share_test_domain }}\\teacher-carol"
+      vars:
+        ansible_become_password: "{{ ansible_vault_password }}"
+      register: share_test_carol
+
+    - name: Access as student-alice (Students, read-only)
+      ansible.windows.win_powershell:
+        script: "{{ share_test_probe }}"
+        parameters:
+          Path: "{{ share_test_unc }}"
+      become: true
+      become_method: ansible.builtin.runas
+      become_flags: logon_type=new_credentials logon_flags=netcredentials_only
+      become_user: "{{ share_test_domain }}\\student-alice"
+      vars:
+        ansible_become_password: "{{ ansible_vault_password }}"
+      register: share_test_alice
+
+    - name: Assert write for carol, read-only for alice
+      ansible.builtin.assert:
+        that:
+          - share_test_carol.result.can_list
+          - share_test_carol.result.can_write
+          - share_test_alice.result.can_list
+          - not share_test_alice.result.can_write
+        fail_msg: "carol: {{ share_test_carol.result | to_json }} / alice: {{ share_test_alice.result | to_json }}"
+
+    - name: Log on as teacher-carol
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autologon_user: "{{ share_test_domain }}\\teacher-carol"
+        win_workman_autologon_password: "{{ ansible_vault_password }}"
+        win_workman_autologon_restart: true
+        win_workman_tasks:
+          - autologon-on
+
+    # Explorer records every drive it shows under MountPoints2, keyed by the
+    # UNC path with "#" for "\"; the drive letter comes from the GPO alone.
+    - name: Wait for the mapped drive in the session of teacher-carol
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$User, [string]$Unc, [int]$TimeoutSec)
+          $sid = (New-Object System.Security.Principal.NTAccount($User)).Translate(
+            [System.Security.Principal.SecurityIdentifier]).Value
+          $key = "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Explorer\MountPoints2\$($Unc.Replace('\', '#'))"
+          $deadline = (Get-Date).AddSeconds($TimeoutSec)
+          while (-not (Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 10 }
+          $Ansible.Changed = $false
+          $Ansible.Result = [ordered]@{
+            mounted = Test-Path -LiteralPath $key
+            gpresult = @(gpresult /r /scope user /user $User 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+          }
+        parameters:
+          User: "{{ share_test_domain }}\\teacher-carol"
+          Unc: "{{ share_test_unc }}"
+          TimeoutSec: 900
+      register: share_test_logon
+
+    - name: Assert the GPO applied and mapped the drive
+      ansible.builtin.assert:
+        that:
+          - share_test_logon.result.mounted
+          - share_test_logon.result.gpresult is contains('Cockpit - Mapped drives')
+        fail_msg: "{{ share_test_logon.result | to_json }}"
+
+    - name: Disable autologon and log off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - autologon-off
+          - logoff-on
+
+- name: Shared folder lifecycle - revoke
+  hosts: "{{ target_hosts | default('samba_dc') }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Revoke Students
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: share
+        samba_tool_action: revoke
+        samba_tool_args:
+          name: "{{ share_test_name }}"
+          read: [Students]
+
+    - name: Assert only Teachers is left
+      ansible.builtin.assert:
+        that:
+          - samba_tool_result is changed
+          - samba_tool_result.share.access | map(attribute='name') | list == ['Teachers']
+
+- name: Shared folder lifecycle - access after revoke
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    share_test_domain: "{{ samba_dc_build_domain }}"
+    share_test_dc: "{{ groups['samba_dc'] | first }}"
+  tasks:
+    - name: Access as student-alice after the revoke
+      ansible.windows.win_powershell:
+        script: *share_test_probe
+        parameters:
+          Path: "\\\\{{ hostvars[share_test_dc].share_test_netbios.stdout | trim }}\\{{ hostvars[share_test_dc].share_test_name }}"
+      become: true
+      become_method: ansible.builtin.runas
+      become_flags: logon_type=new_credentials logon_flags=netcredentials_only
+      become_user: "{{ share_test_domain }}\\student-alice"
+      vars:
+        ansible_become_password: "{{ ansible_vault_password }}"
+      register: share_test_revoked
+
+    - name: Assert alice is refused
+      ansible.builtin.assert:
+        that: not share_test_revoked.result.can_list
+
+- name: Shared folder lifecycle - delete
+  hosts: "{{ target_hosts | default('samba_dc') }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Delete the share and its data
+      ansible.builtin.include_role:
+        name: lineadicomando.samba_ad_dc.samba_tool
+      vars:
+        samba_tool_object: share
+        samba_tool_action: delete
+        samba_tool_args:
+          name: "{{ share_test_name }}"
+          delete_data: true
+
+    - name: Read what is left
+      lineadicomando.samba_ad_dc.samba_share_info:
+        name: "{{ share_test_name }}"
+      register: share_test_left
+
+    - name: Check the folder
+      ansible.builtin.stat:
+        path: "/srv/samba/shares/{{ share_test_name }}"
+      register: share_test_dir
+
+    - name: Look for the drive mapping in sysvol
+      ansible.builtin.shell: >-
+        grep -rlF '{{ share_test_name }}"' /var/lib/samba/sysvol/*/Policies/*/USER/Preferences/Drives/
+      register: share_test_mapping
+      changed_when: false
+      failed_when: share_test_mapping.rc > 1
+
+    - name: Assert nothing is left
+      ansible.builtin.assert:
+        that:
+          - share_test_left.shares | length == 0
+          - not share_test_dir.stat.exists
+          - share_test_mapping.stdout_lines | length == 0

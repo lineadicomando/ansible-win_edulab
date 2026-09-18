@@ -11,9 +11,10 @@ created by `samba_dc_users.yaml` are part of the test environment and stay here.
 tests/
   virsh.yaml           # Utility: VM management via virsh (revert, start, shutdown, ...)
   revert_baseline.yaml # Utility: revert to baseline + wake for arbitrary target (var t)
-  samba_dc.yaml        # Samba AD DC build, test users, domain join of lab_win
+  samba_dc.yaml        # Samba AD DC build, test users, domain join of lab_win, shared folders
   samba_dc_users.yaml  # Domain test users and groups (imported by samba_dc.yaml)
   usr_zed.yaml         # Per-user deferred install (usr action) with domain users, on zed
+  samba_share.yaml     # Shared folders: SMB access per user, drive mapping at logon, revoke, delete (imported by samba_dc.yaml)
   lab_cad.yaml         # CAD lab deployment test
   lab_coding.yaml      # Coding lab deployment test
   seb_classroom.yaml   # SEB classroom deployment test
