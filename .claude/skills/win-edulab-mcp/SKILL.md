@@ -29,7 +29,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 
 | Tool | When to use |
 |------|-------------|
-| `samba` | AD object management (users, groups, computers, OUs) via samba-tool |
+| `samba` | AD object management (users, groups, computers, OUs, home directories, shared folders) via samba-tool |
 | `samba_dc_backup` | DC backup and restore |
 
 ---
@@ -231,7 +231,7 @@ The `samba` and `samba_dc_backup` tools target `samba_dc` by default. Explicit `
 3. samba                    → execute
 ```
 
-**Rule**: always use `preview=true` before destructive actions (`delete`, `absent`, `disable`, `removemembers`, `home-absent`, restore).
+**Rule**: always use `preview=true` before destructive actions (`delete`, `absent`, `disable`, `removemembers`, `home-absent`, `share-revoke`, restore).
 
 ### samba — object actions
 
@@ -242,6 +242,7 @@ The `samba` and `samba_dc_backup` tools target `samba_dc` by default. Explicit `
 | `computer` | `list`, `show`, `create`, `delete`, `absent` |
 | `ou` | `list`, `listobjects`, `create`, `delete`, `absent` |
 | `home` | `provision`, `absent` |
+| `share` | `list`, `show`, `create`, `present`, `grant`, `revoke`, `delete`, `absent` |
 
 `present`/`absent` are idempotent aliases: `present` = create-or-enable; `absent` = delete-or-skip-if-missing.
 
@@ -267,6 +268,35 @@ Examples:
 { "object": "home", "action": "provision", "args": { "name": "alice" } }
 { "object": "home", "action": "provision", "args": { "name": "alice", "home_base": "/home/samba", "home_drive": "H:", "share_name": "home" } }
 { "object": "home", "action": "absent", "args": { "name": "alice" }, "preview": true }
+```
+
+#### share — shared folders
+
+The same shares as the **Shared folders** tab of cockpit-samba-ad-dc: whatever
+is created here shows up in Cockpit and vice versa. Folder
+`/srv/samba/shares/<name>`, access enforced by the share (`valid users`/`read list`)
+and by a POSIX ACL, optional drive mapping at logon through the
+**Cockpit - Mapped drives** GPO. Registry shares outside `/srv/samba/shares`
+(such as `home`) are never touched.
+
+| Argument | Notes |
+|----------|-------|
+| `name` | **required** except for `list` |
+| `access` | list of `{name, kind, level}`; `kind` `user`/`group` is looked up when omitted, `level` `read` (default) or `write` |
+| `read`, `write` | shorthands: lists of names |
+| `comment`, `browseable` | `""` removes the comment; settings left out stay as they are |
+| `drive_letter`, `drive_label` | E–Z except H; `""` removes the mapping |
+| `delete_data` | `delete`/`absent` only; default `false` keeps the folder on disk |
+
+`create`/`present` replace the access list when one is given; `grant` adds
+entries or changes their level; `revoke` removes them (destructive — preview first).
+
+```json
+{ "object": "share", "action": "list" }
+{ "object": "share", "action": "create", "args": { "name": "Materiali", "write": ["Teachers"], "read": ["Students"], "drive_letter": "M" } }
+{ "object": "share", "action": "grant", "args": { "name": "Materiali", "write": ["teacher-carol"] } }
+{ "object": "share", "action": "revoke", "args": { "name": "Materiali", "read": ["Students"] }, "preview": true }
+{ "object": "share", "action": "delete", "args": { "name": "Materiali", "delete_data": true }, "preview": true }
 ```
 
 ### samba_dc_backup — backup and restore

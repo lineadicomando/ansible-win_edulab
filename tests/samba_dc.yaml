@@ -21,3 +21,6 @@
 
 - name: Join Samba AD DC
   ansible.builtin.import_playbook: ../playbooks/samba_dc_join.yaml
+
+- name: Shared folders
+  ansible.builtin.import_playbook: samba_share.yaml
