@@ -156,7 +156,10 @@ today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one r
 
 | Action | What it does |
 |--------|--------------|
-| `run` | Search, download and install available updates |
+| `run` | Install updates of the default profile (`security`: security, critical, rollups, Defender definitions) |
+| `run-full` | All updates except feature updates |
+| `run-upgrades` | Feature updates only (e.g. 25H2 -> 26H2) |
+| `run-cat-<a>[+<b>...]` | Explicit category aliases, e.g. `wu-run-cat-drivers+definitions` |
 | `on` | Resume Windows Update (alias for `resume`) |
 | `off` | Pause Windows Update at max duration (alias for `pause` at max) |
 | `pause` | Pause updates for `win_workman_wu_pause_days` days (default 7) |
@@ -164,7 +167,7 @@ today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one r
 | `max_pause_days` | Read or set `FlightSettingsMaxPauseDays`; without args reports current value, with a duration sets the cap |
 | `is_paused` | Check if updates are paused; sets `win_workman_wu_is_paused` fact |
 | `policy_standard` | Restore standard WU Group Policy |
-| `policy_ansible_managed` | *(deprecated)* Raises an error |
+| `policy_ansible_managed` | *(removed)* Raises an error |
 
 ### Veyon
 

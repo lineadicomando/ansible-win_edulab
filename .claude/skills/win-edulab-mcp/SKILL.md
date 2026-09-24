@@ -190,7 +190,7 @@ when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather tha
 | `wol` | `lab_win` | yes | Wake-on-LAN broadcast across the inventory |
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
-| `maintenance` | `windows11` | yes | Full maintenance cycle: lock → wu-run → wim/sfc → chrome/edge → wallpaper → wu-pause → restart → unlock |
+| `maintenance` | `windows11` | yes | System maintenance: wol → logoff → lock → chkdsk → wim → sfc → optimize → unlock → restart (no Windows Update) |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
 | `samba_dc_build` | `samba_ad_dc` | yes | Build a new Samba AD Domain Controller |
 | `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
@@ -372,7 +372,7 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 ```json
 { "playbook": "maintenance", "inventory": "ario_info", "preview": true }
 ```
-Runs in sequence: lock, wu-run, wim, sfc, chrome/edge updates, wallpaper, wu-pause, restart, unlock.
+Runs in sequence: wol, logoff, lock, chkdsk, wim, sfc, optimize, then unlock and restart. It does not run Windows Update: use `wu-run` (security) or `wu-run-full` through `run_tasks`.
 
 ### Windows Update pause expressed in weeks
 ```json
