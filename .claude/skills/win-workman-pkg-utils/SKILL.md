@@ -295,6 +295,10 @@ Runs an executable with SYSTEM privileges and highest run level via a temporary 
 ```
 
 Honors `win_workman_restart` (bool) and `win_workman_restart_timeout` (seconds).
+The host counts as back once sshd runs, it has been up for a minute and component
+servicing (TrustedInstaller, TiWorker) has stayed idle for 20 seconds, so a reboot
+Windows starts on its own to finish updates is waited out rather than hit by the
+next task.
 
 ### logoff — force logoff all interactive sessions
 
