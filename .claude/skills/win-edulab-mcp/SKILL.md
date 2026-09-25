@@ -67,6 +67,10 @@ exit code. That file is the only reliable signal — **never** wait on a `pgrep 
 ansible command line, because the watcher shell matches its own command line and the
 loop never exits.
 
+A background run is supervised by a detached process, not by the MCP server: it
+survives a server restart or the end of the chat session and still writes its log
+marker and sentinel. After such a restart, pick it up again from the sentinel.
+
 **`wait_run` blocks the turn.** Calling it straight after starting a background run is
 the same as running synchronously: `background=true` buys nothing and the chat stays
 busy until the run ends. Use it only when the very next action depends on the result and

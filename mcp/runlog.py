@@ -16,11 +16,13 @@ Configuration comes from the environment:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
 import shlex
 import subprocess
+import sys
 import threading
 from collections.abc import Callable, Coroutine
 from datetime import datetime
@@ -379,19 +381,40 @@ def start_logged(
 ) -> Path:
     """Start cmd in the background and return its log path straight away.
 
-    The caller polls the log through read_log instead of waiting. The worker is
-    a daemon thread: if the MCP server goes away, so does the run it was
-    watching, exactly as a foreground run would.
+    The caller polls the log through read_log instead of waiting. The run is
+    supervised by a detached copy of this module (see _supervise) in a session
+    of its own, not by a thread of the MCP server: a run over a whole lab, or
+    a Windows Update that reboots for half an hour, outlives the server and
+    the chat session that started it, and still ends with its log marker and
+    sentinel. The run's parameters go over stdin, never on a command line that
+    ps would show, since they can carry secrets.
     """
     path = new_log_path(root, label)
-
-    def work() -> None:
-        try:
-            run_logged(cmd, root, label, timeout, path=path, env=env, redact=redact)
-        except Exception:
-            logger.exception("background run failed: %s", path.name)
-
-    threading.Thread(target=work, name=f"run:{path.stem}", daemon=True).start()
+    spec = {
+        "cmd": cmd,
+        "root": str(root),
+        "label": label,
+        "timeout": timeout,
+        "path": str(path),
+        "env": env,
+        "redact": redact,
+    }
+    supervisor = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--supervise"],
+        cwd=str(root),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        supervisor.stdin.write(json.dumps(spec))
+        supervisor.stdin.close()
+    except OSError:
+        logger.exception("could not hand the run to its supervisor: %s", path.name)
+    # Reap it when it ends, or it lingers as a zombie while the server lives.
+    threading.Thread(target=supervisor.wait, name=f"reap:{path.stem}", daemon=True).start()
     return path
 
 
@@ -500,3 +523,35 @@ def format_status(status: RunStatus, tool: str = "run_status") -> str:
         footer = "[end of run]"
 
     return "\n\n".join(part for part in (header, body, footer) if part)
+
+
+def _supervise() -> None:
+    """Entry point of the detached process start_logged spawns.
+
+    Reads the run spec from stdin and runs it to the end. A run that fails
+    before run_logged can terminate its log still gets the marker and the
+    sentinel here, so it never reads as going on forever.
+    """
+    spec = json.loads(sys.stdin.read())
+    path = Path(spec["path"])
+    try:
+        run_logged(
+            spec["cmd"],
+            Path(spec["root"]),
+            spec["label"],
+            spec.get("timeout"),
+            path=path,
+            env=spec.get("env"),
+            redact=spec.get("redact"),
+        )
+    except Exception as exc:
+        # run_logged already wrote the marker unless it failed before starting.
+        if not done_path(path).exists():
+            with path.open("a", encoding="utf-8") as log:
+                log.write(f"\n[runner error] {exc!r}\n\n--- exit code -1 ---\n")
+            _write_done(path, -1, "")
+        raise
+
+
+if __name__ == "__main__" and sys.argv[1:] == ["--supervise"]:
+    _supervise()
