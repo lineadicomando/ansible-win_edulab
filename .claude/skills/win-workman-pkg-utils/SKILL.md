@@ -336,6 +336,12 @@ Removes files from `win_workman_remote_tmp` after install.
     tasks_from: pending_restart
 ```
 
+Restarts when CBS RebootPending, WU RebootRequired, PendingFileRenameOperations
+or `WinSxS\pending.xml` is set. Before restarting it prints which flags were set
+and up to 20 queued file operations (`rename A -> B`, `delete A`); the result is
+registered as `win_workman_pending_restart.result` with `pending`, `reasons`,
+`operations`, `operation_count`.
+
 ### shortcut_cleaner — remove stale shortcuts
 
 ```yaml
