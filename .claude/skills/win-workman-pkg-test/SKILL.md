@@ -36,6 +36,12 @@ them together (`"vm":["teacher","student01","student02"]`, then `-l teacher,stud
 for `wol` and `secure_ssh`) and start one `run_tasks` per VM in the background so the
 lifecycles run in parallel.
 
+**Mind the control node's memory.** It has 15 GiB of RAM; each Windows VM takes
+4 GiB and the DC 2 GiB, 14 GiB for all four. With all four up the kernel ran out
+of memory on 2026-09-30 and killed desktop processes (the MCP server's uvicorn,
+the editor). Run at most two Windows VMs together, or one plus the DC, and check
+`free -h` before waking more.
+
 ### 2. Power on (Wake-on-LAN)
 
 ```bash
@@ -141,6 +147,13 @@ ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-off"}'
 
 For a full lifecycle test that can be re-run cleanly, follow this structure:
 
+> **Do not import `../playbooks/win_wm.yaml` to wake or set up the VM.** Its play
+> runs on `hosts: all` and only a command-line `-l` narrows it: `hosts:` or
+> `target_hosts:` passed as import vars are ignored, and `t: wol` wakes every VM
+> in the inventory (DC and both students included). Wake through
+> `../playbooks/wol.yaml`, which honours `target_hosts`, and run `secure_ssh`
+> inside the test play. Check with `ansible-playbook <test> --list-hosts`.
+
 ```yaml
 ---
 # tests/<role>.yaml
@@ -151,16 +164,9 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
     snapshot: baseline
 
 - name: Wake target VM
-  ansible.builtin.import_playbook: ../playbooks/win_wm.yaml
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
-    hosts: teacher
-    t: wol
-
-- name: Authorize SSH
-  ansible.builtin.import_playbook: ../playbooks/win_wm.yaml
-  vars:
-    hosts: teacher
-    t: secure_ssh
+    target_hosts: teacher
 
 - name: Lifecycle test — <schema>
   hosts: teacher
@@ -169,6 +175,7 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
     - role: lineadicomando.win_workman.dispatcher
       vars:
         win_workman_tasks:
+          - secure_ssh
           - <schema>-info
           - <schema>-download
           - <schema>-copy
