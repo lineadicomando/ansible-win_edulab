@@ -308,6 +308,20 @@ next task.
     tasks_from: logoff
 ```
 
+### user_sessions — list the user sessions open now
+
+```yaml
+- ansible.builtin.include_role:
+    name: lineadicomando.win_workman.pkg_utils
+    tasks_from: user_sessions
+```
+
+Sets `win_workman_user_sessions`, a list of `SessionId`, `UserName`, `State`
+(`Active`, `Disconnected`, ...). Every state with a user counts, unlike `logoff`,
+which only sees `Active` sessions: a user switched away from or dropped from RDP
+is `Disconnected`. Session 0 (services, the Ansible SSH connection) and system
+accounts are left out. Used by `shutdown-if-nouser`.
+
 ### profiles — enumerate user profiles
 
 ```yaml
