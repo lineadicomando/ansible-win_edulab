@@ -1,0 +1,201 @@
+---
+# Test for shutdown-if-nouser: the host shuts down only when no user session is
+# open, whatever its state.
+#
+#   ansible-playbook tests/shutdown_if_nouser.yaml
+#   ansible-playbook tests/shutdown_if_nouser.yaml -e vm_host=student01
+#
+# From the baseline snapshot, on one host:
+#   1. a bare shutdown-if fails validation
+#   2. no user logged on: the helper lists no session (the Ansible SSH session
+#      is not one)
+#   3. autologon of the connection user: Active session, the host stays on
+#   4. the session disconnected: Disconnected, the host still stays on
+#   5. the session logged off: the host shuts down
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: ["{{ vm_host | default('teacher') }}"]
+    cmd: snapshot-revert
+    snapshot: baseline
+
+# Not playbooks/win_wm.yaml: its play runs on hosts: all and only -l narrows it,
+# so it would wake and set up every VM in the inventory
+- name: Wake target VM
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ vm_host | default('teacher') }}"
+
+- name: Shutdown only without users - shutdown-if-nouser
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    # Long enough to see a wrong shutdown coming, short enough to wait for it
+    win_workman_shutdown_timeout: 30
+    shutdown_test_grace: 60
+  tasks:
+    - name: Authorize SSH
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [secure_ssh]
+
+    - name: A bare shutdown-if is refused
+      block:
+        - name: Run shutdown-if without a condition
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks: [shutdown-if]
+
+        - name: Record that it was accepted
+          ansible.builtin.set_fact:
+            shutdown_test_bare_accepted: true
+      rescue:
+        - name: Record that it was refused
+          ansible.builtin.set_fact:
+            shutdown_test_bare_accepted: false
+
+    - name: Assert the bare form was refused
+      ansible.builtin.assert:
+        that: not shutdown_test_bare_accepted
+
+    - name: List sessions with nobody logged on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: user_sessions
+
+    - name: Assert no session, the SSH connection included
+      ansible.builtin.assert:
+        that: win_workman_user_sessions | length == 0
+        fail_msg: "Unexpected sessions: {{ win_workman_user_sessions }}"
+
+    - name: Log on as {{ ansible_user }}
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autologon_restart: true
+        win_workman_tasks: [autologon-on]
+
+    - name: Wait for the desktop of {{ ansible_user }}
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$User, [int]$TimeoutSec)
+          $Ansible.Changed = $false
+          $deadline = (Get-Date).AddSeconds($TimeoutSec)
+          do {
+            $shell = Get-Process explorer -IncludeUserName -ErrorAction SilentlyContinue |
+              Where-Object { $_.UserName -match "\\$User$" }
+            if ($shell) { return }
+            Start-Sleep -Seconds 5
+          } while ((Get-Date) -lt $deadline)
+          $Ansible.Failed = $true
+        parameters:
+          User: "{{ ansible_user }}"
+          TimeoutSec: 600
+
+    # No autologon from here on, or a later logoff would log the user back on
+    - name: Turn autologon off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autologon-off]
+
+    # Checked before shutdown-if-nouser too, so a helper that misses the
+    # session fails here instead of shutting the host down under the test
+    - name: List sessions with {{ ansible_user }} logged on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: user_sessions
+
+    - name: Assert the helper sees the session
+      ansible.builtin.assert:
+        that: win_workman_user_sessions | length == 1
+        fail_msg: "Sessions: {{ win_workman_user_sessions }}"
+
+    - name: Shutdown-if-nouser with an Active session
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown-if-nouser]
+
+    - name: Assert the Active session was seen
+      ansible.builtin.assert:
+        that:
+          - win_workman_user_sessions | length == 1
+          - win_workman_user_sessions[0].UserName is search(ansible_user ~ '$')
+          - win_workman_user_sessions[0].State == 'Active'
+        fail_msg: "Sessions: {{ win_workman_user_sessions }}"
+
+    - name: Give a wrong shutdown the time to happen
+      ansible.builtin.pause:
+        seconds: "{{ shutdown_test_grace }}"
+
+    - name: Assert the host is still on
+      ansible.windows.win_ping:
+
+    - name: Disconnect the session
+      ansible.windows.win_powershell:
+        script: |
+          param([int]$SessionId)
+          tsdiscon $SessionId
+          if ($LASTEXITCODE -ne 0) { throw "tsdiscon $SessionId exited $LASTEXITCODE" }
+        parameters:
+          SessionId: "{{ win_workman_user_sessions[0].SessionId }}"
+
+    - name: Shutdown-if-nouser with a Disconnected session
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown-if-nouser]
+
+    - name: Assert the Disconnected session was seen
+      ansible.builtin.assert:
+        that:
+          - win_workman_user_sessions | length == 1
+          - win_workman_user_sessions[0].State == 'Disconnected'
+        fail_msg: "Sessions: {{ win_workman_user_sessions }}"
+
+    - name: Give a wrong shutdown the time to happen
+      ansible.builtin.pause:
+        seconds: "{{ shutdown_test_grace }}"
+
+    - name: Assert the host is still on
+      ansible.windows.win_ping:
+
+    # The logoff role only logs off Active sessions
+    - name: Log the disconnected session off
+      ansible.windows.win_powershell:
+        script: |
+          param([int]$SessionId, [int]$TimeoutSec)
+          logoff $SessionId
+          $deadline = (Get-Date).AddSeconds($TimeoutSec)
+          while ((Get-Process explorer -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 5
+          }
+          if (Get-Process explorer -ErrorAction SilentlyContinue) { throw "session $SessionId still has a shell" }
+        parameters:
+          SessionId: "{{ win_workman_user_sessions[0].SessionId }}"
+          TimeoutSec: 120
+
+    - name: Shutdown-if-nouser with nobody logged on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown-if-nouser]
+
+    - name: Assert no session was seen
+      ansible.builtin.assert:
+        that: win_workman_user_sessions | length == 0
+        fail_msg: "Sessions: {{ win_workman_user_sessions }}"
+
+    - name: Assert the host goes offline
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ ansible_port | default(22) }}"
+        state: stopped
+        delay: 15
+        timeout: 300
+      delegate_to: localhost

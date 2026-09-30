@@ -19,6 +19,7 @@ tests/
   lab_coding.yaml      # Coding lab deployment test
   seb_classroom.yaml   # SEB classroom deployment test
   veyon.yaml           # Veyon deployment test
+  shutdown_if_nouser.yaml # shutdown-if-nouser: stays on with an Active or Disconnected session, shuts down without
 ```
 
 ## Test environment
