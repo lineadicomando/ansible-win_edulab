@@ -194,7 +194,7 @@ when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather tha
 | `wol` | `lab_win` | yes | Wake-on-LAN broadcast across the inventory |
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
-| `maintenance` | `windows11` | yes | System maintenance: wol → logoff → lock → chkdsk → wim → sfc → optimize → unlock → restart (no Windows Update) |
+| `maintenance` | `lab_win` | yes | System maintenance: wol → logoff → lock → chkdsk → wim → sfc → optimize → unlock → restart (no Windows Update) |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
 | `samba_dc_build` | `samba_ad_dc` | yes | Build a new Samba AD Domain Controller |
 | `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
@@ -217,8 +217,7 @@ Pass `target_hosts` via the `e` parameter to override the default group:
 Discovered via `get_inventory`; groups common to most inventories:
 - `teachers` — teacher PC(s)
 - `students` — student PCs
-- `lab_win` — all Windows PCs in the lab (teachers + students)
-- `windows11` — all Windows 11 hosts
+- `lab_win` — all Windows PCs (built from the lab groups, or from teachers + students); carries the connection settings
 - `servers` — Linux servers (samba-ad-dc etc.)
 - `samba_dc` — domain controller(s); **required by the samba_ad_dc collection** — all inventories that use the samba tools must define this group
 

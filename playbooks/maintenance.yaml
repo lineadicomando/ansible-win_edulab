@@ -1,6 +1,6 @@
 ---
 - name: Routine maintenance — Updates and system cleanup
-  hosts: "{{ target_hosts | default('windows11') }}"
+  hosts: "{{ target_hosts | default('lab_win') }}"
   gather_facts: false
   roles:
     - role: lineadicomando.win_workman.dispatcher
@@ -17,7 +17,7 @@
         win_workman_mode_text: "Do not turn off the PC. Maintenance is almost complete."
 
 - name: Routine maintenance — Unlock workstations
-  hosts: "{{ target_hosts | default('windows11') }}"
+  hosts: "{{ target_hosts | default('lab_win') }}"
   gather_facts: false
   roles:
     - role: lineadicomando.win_workman.dispatcher

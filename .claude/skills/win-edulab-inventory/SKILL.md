@@ -43,8 +43,8 @@ inventories/<lab>/
 │   │   └── vars.yaml                   # variables specific to teacher PCs
 │   ├── students/
 │   │   └── vars.yaml                   # variables specific to student PCs
-│   └── windows11/
-│       └── vars.yaml                   # variables specific to Windows 11 hosts
+│   └── lab_win/
+│       └── vars.yaml                   # SSH/PowerShell connection settings for the Windows PCs
 └── host_vars/
     └── <HOSTNAME>.yaml                 # per-host overrides (e.g. DOC.yaml)
 ```
@@ -59,13 +59,46 @@ all:
     servers:          # Linux servers (samba-ad-dc)
     teachers:         # teacher PC(s)
     students:         # student PCs
-    lab_win:          # all Windows PCs in the lab (teachers + students)
-    lab_cad:          # same hosts as lab_win — semantic alias for CAD lab playbooks
-    lab_coding:       # same hosts as lab_win — semantic alias for coding lab playbooks
-    windows11:        # all Windows 11 hosts
+    lab_cad:          # vertical: the PCs of the CAD lab, listed directly
+    lab_coding:       # vertical: the PCs of the coding lab, listed directly
+    lab_win:          # transversal: every Windows PC, built from other groups
 ```
 
-Groups `lab_win`, `lab_cad`, `lab_coding`, `windows11` reference the same hosts — never duplicate them, use them as semantic aliases for targeting playbooks.
+Three kinds of group, each answering a different question:
+
+- **Role** (`servers`, `teachers`, `students`) — what the machine is. Hosts are declared
+  here, once, with `ansible_host` and `ansible_mac`.
+- **Vertical** (`lab_cad`, `lab_coding`) — which lab the PC sits in. They list hosts
+  directly; real labs rarely share machines.
+- **Transversal** (`lab_win`) — every Windows PC whatever its lab. Built with `children`,
+  never by repeating hosts. It carries the connection settings and is the default target
+  of the lab-wide playbooks.
+
+`school` builds `lab_win` from the labs:
+
+```yaml
+lab_win:
+  children:
+    lab_cad:
+    lab_coding:
+```
+
+The site inventories hold one lab each, so they have no vertical groups and build it
+from the roles:
+
+```yaml
+lab_win:
+  children:
+    teachers:
+    students:
+```
+
+`spalla_aule` is the exception: no roles, and `lab_win` lists directly the PCs that are
+managed. There is no `windows11` group any more: its variables moved to
+`group_vars/lab_win`. Add a version group only where a play really needs one.
+
+Variables set on a child group win over those of its parents, so `teachers`/`students`
+(or the lab groups) override `lab_win` on a clash.
 
 ---
 
@@ -105,7 +138,7 @@ win_workman_veyon_master: false
 ## Adding a new host
 
 1. Add it to `hosts.yaml` in the right group with `ansible_host` and `ansible_mac`
-2. Reference it in the logical groups (`lab_win`, `windows11`, etc.)
+2. In an inventory with vertical groups, name it in its lab group too. `lab_win` picks it up through `children`
 3. If needed, create `host_vars/<HOSTNAME>.yaml` for host-specific overrides
 
 ```yaml
@@ -115,10 +148,7 @@ students:
     student03:
       ansible_host: <IP in the lab subnet>   # see ansible_subnet in group_vars/all
       ansible_mac: <NIC MAC, needed by wol>
-lab_win:
-  hosts:
-    student03:
-windows11:
+lab_coding:           # only where the inventory has lab groups
   hosts:
     student03:
 ```
