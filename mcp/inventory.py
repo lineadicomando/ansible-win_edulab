@@ -19,19 +19,43 @@ def list_inventories() -> list[str]:
 
 def _parse(raw: dict) -> dict:
     hosts: dict = {}
-    groups: dict = {}
-    _walk(raw.get("all", {}), hosts, groups)
+    direct: dict = {}
+    children: dict = {}
+    _walk(raw.get("all", {}), hosts, direct, children)
+    groups = {name: _members(name, direct, children) for name in direct}
     return {"hosts": hosts, "groups": groups}
 
 
-def _walk(node: dict, hosts: dict, groups: dict, group_name: str = None):
+def _walk(node: dict, hosts: dict, direct: dict, children: dict, group_name: str = None):
+    if group_name:
+        direct.setdefault(group_name, [])
+        children.setdefault(group_name, [])
+
     for host, vars_ in (node.get("hosts") or {}).items():
         if host not in hosts:
             hosts[host] = vars_ or {}
-        if group_name:
-            groups.setdefault(group_name, [])
-            if host not in groups[group_name]:
-                groups[group_name].append(host)
+        if group_name and host not in direct[group_name]:
+            direct[group_name].append(host)
 
     for child_name, child_node in (node.get("children") or {}).items():
-        _walk(child_node or {}, hosts, groups, child_name)
+        if group_name and child_name not in children[group_name]:
+            children[group_name].append(child_name)
+        _walk(child_node or {}, hosts, direct, children, child_name)
+
+
+def _members(name: str, direct: dict, children: dict, seen: set = None) -> list[str]:
+    """A group's hosts, its own first and then those of its child groups.
+
+    A group may be made of children alone, and a child is often just a name
+    that points at a group defined elsewhere in the file.
+    """
+    seen = seen if seen is not None else set()
+    if name in seen:
+        return []
+    seen.add(name)
+    members = list(direct.get(name, []))
+    for child in children.get(name, []):
+        for host in _members(child, direct, children, seen):
+            if host not in members:
+                members.append(host)
+    return members
