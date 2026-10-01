@@ -169,6 +169,15 @@ today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one r
 | `policy_standard` | Restore standard WU Group Policy |
 | `policy_ansible_managed` | *(removed)* Raises an error |
 
+### Automatic shutdown (autoshutdown)
+
+| Action | What it does |
+|--------|--------------|
+| `on` | Create or update the scheduled task that shuts the host down at the times in `win_workman_autoshutdown_schedule` |
+| `on-<HHMM>` | Same, at that time on every day: `autoshutdown-on-1830`. The argument wins over the variable |
+| `off` | Remove the scheduled task |
+| `info` | Report scheduled times, task state and last outcome |
+
 ### Veyon
 
 | Action | What it does |

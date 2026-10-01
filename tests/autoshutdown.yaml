@@ -1,0 +1,383 @@
+---
+# Test for the autoshutdown role: the scheduled task that shuts a host down on
+# its own at fixed times.
+#
+#   ansible-playbook tests/autoshutdown.yaml
+#   ansible-playbook tests/autoshutdown.yaml -e test_hosts=teacher,student01,student02
+#
+# From the baseline snapshot, on every host:
+#   1. invalid settings are refused and leave no task behind: an unquoted time,
+#      an unknown day, the nouser mode, a malformed argument, a relative path
+#   2. a schedule with different times on different days gives one trigger per
+#      entry, and a second run changes nothing
+#   3. a custom task name and path are honoured, and off removes that task
+#   4. a single time replaces the list with one daily trigger
+#   5. off removes the task and its folder, the innermost one of a nested path
+# Then the task really fires, a few minutes ahead on the host clock. Each host
+# takes one scenario, by its position in the play (inventory order, whatever
+# the order in test_hosts), so three hosts cover all:
+#   1st  daily         autoshutdown-on-HHMM: the host shuts down
+#   2nd  weekly_today  a weekly trigger on today: the host shuts down
+#   3rd  weekly_other  a weekly trigger on every day but today: the host stays
+#                      on, and the task is removed at the end
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: "{{ (test_hosts | default('teacher')).split(',') }}"
+    cmd: snapshot-revert
+    snapshot: baseline
+
+# Not playbooks/win_wm.yaml: its play runs on hosts: all and only -l narrows it,
+# so it would wake and set up every VM in the inventory
+- name: Wake target VMs
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ test_hosts | default('teacher') }}"
+
+- name: Scheduled shutdown - autoshutdown
+  hosts: "{{ test_hosts | default('teacher') }}"
+  gather_facts: false
+  vars:
+    autoshutdown_test_scenarios: [daily, weekly_today, weekly_other]
+    autoshutdown_test_scenario: >-
+      {{ autoshutdown_test_scenarios[ansible_play_hosts_all.index(inventory_hostname) % 3] }}
+    autoshutdown_test_weekdays: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+    # Minutes between scheduling the task and its trigger
+    autoshutdown_test_lead: 3
+    autoshutdown_test_warning: 30
+    autoshutdown_test_refused: []
+    # What info read back, as "HH:MM days" per trigger
+    autoshutdown_test_schedule: >-
+      {{
+        win_workman_autoshutdown_info.triggers | map(attribute='start_boundary')
+        | map('regex_replace', '^.*T(\d\d:\d\d).*$', '\1')
+        | zip(win_workman_autoshutdown_info.triggers | map(attribute='days_of_week', default='daily')
+              | map('default', 'daily', true))
+        | map('join', ' ') | list
+      }}
+  tasks:
+    - name: Authorize SSH
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [secure_ssh]
+
+    # ---- 1. invalid settings ------------------------------------------------
+
+    - name: An unquoted time is refused
+      block:
+        - name: Run autoshutdown with the number YAML makes of a bare 18:30
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_autoshutdown_schedule: 1110
+            win_workman_tasks: [autoshutdown]
+      rescue:
+        - name: Record the refusal
+          ansible.builtin.set_fact:
+            autoshutdown_test_refused: "{{ autoshutdown_test_refused + ['time'] }}"
+
+    - name: An unknown day is refused
+      block:
+        - name: Run autoshutdown with an Italian day name
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_autoshutdown_schedule:
+              - time: "18:30"
+                days: [monday, sabato]
+            win_workman_tasks: [autoshutdown]
+      rescue:
+        - name: Record the refusal
+          ansible.builtin.set_fact:
+            autoshutdown_test_refused: "{{ autoshutdown_test_refused + ['day'] }}"
+
+    - name: The nouser mode is refused until it is implemented
+      block:
+        - name: Run autoshutdown in nouser mode
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_autoshutdown_mode: nouser
+            win_workman_tasks: [autoshutdown]
+      rescue:
+        - name: Record the refusal
+          ansible.builtin.set_fact:
+            autoshutdown_test_refused: "{{ autoshutdown_test_refused + ['mode'] }}"
+
+    - name: A malformed time argument is refused
+      block:
+        - name: Run autoshutdown-on-2575
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks: [autoshutdown-on-2575]
+      rescue:
+        - name: Record the refusal
+          ansible.builtin.set_fact:
+            autoshutdown_test_refused: "{{ autoshutdown_test_refused + ['argument'] }}"
+
+    - name: A task path without the leading backslash is refused
+      block:
+        - name: Run autoshutdown with a relative task path
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_autoshutdown_task_path: win_workman
+            win_workman_tasks: [autoshutdown]
+      rescue:
+        - name: Record the refusal
+          ansible.builtin.set_fact:
+            autoshutdown_test_refused: "{{ autoshutdown_test_refused + ['path'] }}"
+
+    - name: Read the task after the refused runs
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autoshutdown-info]
+
+    - name: Assert all five were refused and none left a task
+      ansible.builtin.assert:
+        that:
+          - autoshutdown_test_refused == ['time', 'day', 'mode', 'argument', 'path']
+          - not win_workman_autoshutdown_info.task_exists
+        fail_msg: "Refused: {{ autoshutdown_test_refused }}"
+
+    # ---- 2. different times on different days -------------------------------
+
+    # Hours away from now, so the structural steps never shut the host down
+    - name: Pick times far from the host clock
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $now = Get-Date
+          $Ansible.Result = @{
+            a = $now.AddHours(6).ToString('HH:mm')
+            b = $now.AddHours(9).ToString('HH:mm')
+            c = $now.AddHours(12).ToString('HH:mm')
+          }
+      register: autoshutdown_test_far
+
+    - name: Schedule different times on different days
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autoshutdown_schedule: &autoshutdown_test_list
+          # Out of week order and in mixed case on purpose
+          - time: "{{ autoshutdown_test_far.result.a }}"
+            days: [friday, Monday, wednesday, monday]
+          - time: "{{ autoshutdown_test_far.result.b }}"
+            days: [saturday]
+          - "{{ autoshutdown_test_far.result.c }}"
+        win_workman_tasks: [autoshutdown-on, autoshutdown-info]
+
+    - name: Assert one trigger per entry
+      ansible.builtin.assert:
+        that:
+          - win_workman_autoshutdown_result is changed
+          - win_workman_autoshutdown_info.task_exists
+          - win_workman_autoshutdown_info.settings.enabled
+          - not win_workman_autoshutdown_info.settings.start_when_available
+          - >-
+            autoshutdown_test_schedule == [
+              autoshutdown_test_far.result.a ~ ' monday,wednesday,friday',
+              autoshutdown_test_far.result.b ~ ' saturday',
+              autoshutdown_test_far.result.c ~ ' daily',
+            ]
+          - win_workman_autoshutdown_info.actions | length == 1
+          - win_workman_autoshutdown_info.actions[0].arguments is search('^/s /f /t 60 /c ')
+        fail_msg: "Schedule: {{ autoshutdown_test_schedule }}, task: {{ win_workman_autoshutdown_info }}"
+
+    - name: Schedule the same times again
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autoshutdown_schedule: *autoshutdown_test_list
+        win_workman_tasks: [autoshutdown-on]
+
+    - name: Assert the second run changed nothing
+      ansible.builtin.assert:
+        that: win_workman_autoshutdown_result is not changed
+
+    # ---- 3. custom task name and path ---------------------------------------
+
+    - name: Schedule under a custom name and path
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autoshutdown_task_path: \school\evening
+        win_workman_autoshutdown_task_name: Lab shutdown
+        win_workman_autoshutdown_schedule: "{{ autoshutdown_test_far.result.a }}"
+        win_workman_autoshutdown_warning: 0
+        win_workman_autoshutdown_message: 'Closing "now"'
+        win_workman_tasks: [autoshutdown-on, autoshutdown-info]
+
+    - name: Assert the custom task, with the quotes of the message neutralised
+      ansible.builtin.assert:
+        that:
+          - win_workman_autoshutdown_result is changed
+          - win_workman_autoshutdown_info.task_exists
+          - autoshutdown_test_schedule == [autoshutdown_test_far.result.a ~ ' daily']
+          - win_workman_autoshutdown_info.actions[0].arguments == "/s /f /t 0 /c \"Closing 'now'\""
+        fail_msg: "Task: {{ win_workman_autoshutdown_info }}"
+
+    - name: Remove the custom task
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autoshutdown_task_path: \school\evening
+        win_workman_autoshutdown_task_name: Lab shutdown
+        win_workman_tasks: [autoshutdown-off, autoshutdown-info]
+
+    - name: Assert the custom task is gone
+      ansible.builtin.assert:
+        that:
+          - win_workman_autoshutdown_result is changed
+          - not win_workman_autoshutdown_info.task_exists
+
+    # ---- 4. a single time for every day -------------------------------------
+
+    - name: Replace the list with a single time
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autoshutdown_schedule: "{{ autoshutdown_test_far.result.b }}"
+        win_workman_tasks: [autoshutdown, autoshutdown-info]
+
+    - name: Assert the default task survived step 3 and now has one daily trigger
+      ansible.builtin.assert:
+        that:
+          - win_workman_autoshutdown_result is changed
+          - autoshutdown_test_schedule == [autoshutdown_test_far.result.b ~ ' daily']
+        fail_msg: "Schedule: {{ autoshutdown_test_schedule }}"
+
+    # ---- 5. off --------------------------------------------------------------
+
+    - name: Remove the task, twice
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autoshutdown-off, autoshutdown-info, autoshutdown-off]
+
+    - name: List what is left in the Task Scheduler
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $service = New-Object -ComObject Schedule.Service
+          $service.Connect()
+          $Ansible.Result = @{
+            folders = @($service.GetFolder('\').GetFolders(0) | ForEach-Object { $_.Name })
+            school  = @($service.GetFolder('\school').GetFolders(0) | ForEach-Object { $_.Name })
+          }
+      register: autoshutdown_test_folders
+
+    # Only the innermost folder goes with its last task: \school stays, empty
+    - name: Assert the task and its folders are gone, and the second off was a no-op
+      ansible.builtin.assert:
+        that:
+          - not win_workman_autoshutdown_info.task_exists
+          - win_workman_autoshutdown_result is not changed
+          - "'win_workman' not in autoshutdown_test_folders.result.folders"
+          - autoshutdown_test_folders.result.school | length == 0
+        fail_msg: "Folders: {{ autoshutdown_test_folders.result }}"
+
+    # ---- the task fires ------------------------------------------------------
+
+    - name: Pick a time a few minutes ahead on the host clock
+      ansible.windows.win_powershell:
+        script: |
+          param([int]$Lead)
+          $Ansible.Changed = $false
+          $fire = (Get-Date).AddMinutes($Lead)
+          $Ansible.Result = @{
+            time = $fire.ToString('HH:mm')
+            arg  = $fire.ToString('HHmm')
+            day  = $fire.DayOfWeek.ToString().ToLower()
+          }
+        parameters:
+          Lead: "{{ autoshutdown_test_lead }}"
+      register: autoshutdown_test_fire
+
+    - name: Schedule the shutdown - {{ autoshutdown_test_scenario }}
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autoshutdown_warning: "{{ autoshutdown_test_warning }}"
+        win_workman_autoshutdown_schedule:
+          - time: "{{ autoshutdown_test_fire.result.time }}"
+            days: >-
+              {{
+                [autoshutdown_test_fire.result.day] if autoshutdown_test_scenario == 'weekly_today'
+                else autoshutdown_test_weekdays | difference([autoshutdown_test_fire.result.day])
+              }}
+        win_workman_tasks: >-
+          {{
+            ['autoshutdown-on-' ~ autoshutdown_test_fire.result.arg] if autoshutdown_test_scenario == 'daily'
+            else ['autoshutdown-on']
+          }}
+
+    - name: Read the task that is about to fire
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autoshutdown-info]
+
+    - name: Assert the argument won over the variable - daily
+      ansible.builtin.assert:
+        that: autoshutdown_test_schedule == [autoshutdown_test_fire.result.time ~ ' daily']
+        fail_msg: "Schedule: {{ autoshutdown_test_schedule }}"
+      when: autoshutdown_test_scenario == 'daily'
+
+    - name: Assert the weekly trigger - weekly_today, weekly_other
+      ansible.builtin.assert:
+        that:
+          - autoshutdown_test_schedule | length == 1
+          - >-
+            (autoshutdown_test_fire.result.day in autoshutdown_test_schedule[0].split(' ')[1].split(','))
+            == (autoshutdown_test_scenario == 'weekly_today')
+        fail_msg: "Schedule: {{ autoshutdown_test_schedule }}"
+      when: autoshutdown_test_scenario != 'daily'
+
+    - name: Assert the host goes offline - daily, weekly_today
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ ansible_port | default(22) }}"
+        state: stopped
+        delay: 15
+        timeout: "{{ autoshutdown_test_lead * 60 + autoshutdown_test_warning + 300 }}"
+      delegate_to: localhost
+      when: autoshutdown_test_scenario != 'weekly_other'
+
+    # Not pause: it runs once for the whole play, on the condition of the first host
+    - name: Let the scheduled time and the warning go by - weekly_other
+      ansible.builtin.wait_for:
+        timeout: "{{ autoshutdown_test_lead * 60 + autoshutdown_test_warning + 90 }}"
+      delegate_to: localhost
+      when: autoshutdown_test_scenario == 'weekly_other'
+
+    - name: Assert the host is still on - weekly_other
+      ansible.windows.win_ping:
+      when: autoshutdown_test_scenario == 'weekly_other'
+
+    - name: Read the task that did not fire - weekly_other
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autoshutdown-info]
+      when: autoshutdown_test_scenario == 'weekly_other'
+
+    # 267011 is SCHED_S_TASK_HAS_NOT_RUN
+    - name: Assert it never ran - weekly_other
+      ansible.builtin.assert:
+        that: win_workman_autoshutdown_info.state.last_task_result == 267011
+        fail_msg: "State: {{ win_workman_autoshutdown_info.state }}"
+      when: autoshutdown_test_scenario == 'weekly_other'
+
+    - name: Remove the task from the host left on - weekly_other
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autoshutdown-off]
+      when: autoshutdown_test_scenario == 'weekly_other'

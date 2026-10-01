@@ -20,6 +20,7 @@ tests/
   seb_classroom.yaml   # SEB classroom deployment test
   veyon.yaml           # Veyon deployment test
   shutdown_if_nouser.yaml # shutdown-if-nouser: stays on with an Active or Disconnected session, shuts down without
+  autoshutdown.yaml    # autoshutdown: schedule forms, validation, off; the task fires daily and weekly, and not on other days
 ```
 
 ## Test environment
