@@ -38,10 +38,9 @@ The organization of files and folders within the project is as follows:
 │       ├── hosts.yaml                  # Lab host inventory
 │       ├── group_vars/
 │       │   ├── all/
-│       │   │   ├── vars.yaml           # Global variables and DC parameters
+│       │   │   ├── vars.yaml           # Global variables, lab network and DC parameters
 │       │   │   ├── vault.yaml          # Encrypted secrets (gitignored)
 │       │   │   └── vault.yaml.example  # Template for vault.yaml
-│       │   ├── servers/vars.yaml       # Subnet and broadcast address
 │       │   ├── teachers/vars.yaml      # Veyon master flag and lab groups
 │       │   ├── students/vars.yaml      # Veyon client flag
 │       │   └── lab_win/vars.yaml       # SSH/PowerShell connection settings

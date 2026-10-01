@@ -3,6 +3,9 @@ ansible_user: maint
 ansible_password: "{{ ansible_vault_password }}"
 ansible_become_password: "{{ ansible_vault_become_password }}"
 ansible_domain: "school.internal"
+# Lab network. ansible_broadcast is where wol sends its magic packets.
+ansible_subnet: 192.168.122.0/24
+ansible_broadcast: 192.168.122.255
 ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub
 # SECURITY NOTE: StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null disable host
 # key verification, making connections vulnerable to MITM attacks. Acceptable only in
