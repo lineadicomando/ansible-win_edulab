@@ -166,8 +166,9 @@ tracked by git; site-specific inventories next to it are gitignored.
     "servers":   ["samba_ad_dc"],
     "teachers":  ["teacher"],
     "students":  ["student01", "student02"],
+    "lab_cad":   ["teacher", "student01", "student02"],
+    "lab_coding": ["teacher", "student01", "student02"],
     "lab_win":   ["teacher", "student01", "student02"],
-    "windows11": ["teacher", "student01", "student02"],
     "samba_dc":  ["samba_ad_dc"]
   }
 }

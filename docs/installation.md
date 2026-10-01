@@ -377,12 +377,17 @@ all:
         student02:
           ansible_host: <student2-IP>
           ansible_mac: <student2-MAC>
-    lab_win:         # default target for many playbooks
+    lab_cad:         # one group per lab, listing its PCs directly
       hosts: { teacher:, student01:, student02: }
-    windows11:       # SSH/PowerShell connection settings
+    lab_coding:
       hosts: { teacher:, student01:, student02: }
-    # ... other custom groups (e.g., lab_cad, lab_coding)
+    lab_win:         # every Windows PC: default target for many playbooks,
+      children:      # and holder of the SSH/PowerShell connection settings
+        lab_cad:
+        lab_coding:
 ```
+
+Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `lab_win` is built from the labs. An inventory that holds a single lab can build `lab_win` from `teachers` and `students` instead.
 
 Also, edit `inventories/school/group_vars/all/vars.yaml` to define the SSH key path and collection-level settings.
 

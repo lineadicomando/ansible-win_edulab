@@ -10,7 +10,7 @@ Playbooks that target a specific group accept the `-e target_hosts=<group|host>`
 | `lab_cad.yaml` | `lab_cad` |
 | `lab_coding.yaml` | `lab_coding` |
 | `veyon.yaml` | `lab_win` |
-| `maintenance.yaml` | `windows11` |
+| `maintenance.yaml` | `lab_win` |
 | `autologon.yaml` | `lab_win` |
 | `wol.yaml` | `lab_win` |
 | `shutdown.yaml` | `lab_win` |

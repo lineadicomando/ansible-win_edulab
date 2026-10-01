@@ -44,7 +44,7 @@ The organization of files and folders within the project is as follows:
 │       │   ├── servers/vars.yaml       # Subnet and broadcast address
 │       │   ├── teachers/vars.yaml      # Veyon master flag and lab groups
 │       │   ├── students/vars.yaml      # Veyon client flag
-│       │   └── windows11/vars.yaml     # SSH/PowerShell connection settings
+│       │   └── lab_win/vars.yaml       # SSH/PowerShell connection settings
 │       └── host_vars/
 ├── playbooks/                          # Shared, reusable playbooks (see above)
 ├── local/                              # Site-specific and one-off playbooks (gitignored)
