@@ -160,6 +160,8 @@ today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one r
 | `run-full` | All updates except feature updates |
 | `run-upgrades` | Feature updates only (e.g. 25H2 -> 26H2) |
 | `run-cat-<a>[+<b>...]` | Explicit category aliases, e.g. `wu-run-cat-drivers+definitions` |
+| `run-optional-<a>[+<b>...]` | The same aliases among the updates offered as optional (preview cumulative, optional feature update, drivers), e.g. `wu-run-optional-upgrades`; a category is required |
+| `scan` | Read-only: list the updates offered, regular and optional; sets `win_workman_wu_scan` fact |
 | `on` | Resume Windows Update (alias for `resume`) |
 | `off` | Pause Windows Update at max duration (alias for `pause` at max) |
 | `pause` | Pause updates for `win_workman_wu_pause_days` days (default 7) |

@@ -377,6 +377,13 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 ```
 Runs in sequence: wol, logoff, lock, chkdsk, wim, sfc, optimize, then unlock and restart. It does not run Windows Update: use `wu-run` (security) or `wu-run-full` through `run_tasks`.
 
+### See what Windows Update offers, then install an optional feature update
+```json
+{ "t": ["wu-scan"], "l": "lab_win", "inventory": "ario_info" }
+{ "t": ["wu-run-optional-upgrades", "wu-run"], "l": "lab_win", "inventory": "ario_info", "preview": true }
+```
+`wu-run-upgrades` finds nothing when the feature update is offered as optional (26H2 on 25H2 hosts): `wu-scan` lists it under "Optional", and `wu-run-optional-<category>` installs it. The `wu-run` after it brings the cumulative of the new release.
+
 ### Windows Update pause expressed in weeks
 ```json
 { "t": ["wu-pause-3-w"], "l": "students", "preview": true }
