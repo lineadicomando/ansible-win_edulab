@@ -15,7 +15,7 @@ from adhoc import (
     secret_values,
     summarise,
 )
-from ansible_runner import build_playbook_command, run_command, run_raw, run_status, start_run, wait_run
+from ansible_runner import MAX_FORKS, build_playbook_command, run_command, run_raw, run_status, start_run, validate_forks, wait_run
 from runlog import NotifyFn, done_path, format_status
 from inventory import list_inventories, load_inventory
 from preflight import preflight
@@ -78,6 +78,17 @@ def _get_tools() -> list[Tool]:
                     "inventory": {
                         "type": "string",
                         "default": "school",
+                    },
+                    "forks": {
+                        "type": "integer",
+                        "description": (
+                            "Hosts worked on in parallel (ansible -f). Omit it to keep "
+                            "the configured value, 5 unless ansible.cfg or ANSIBLE_FORKS "
+                            "say otherwise; set it to the number of hosts to run a whole "
+                            "lab at once instead of five at a time."
+                        ),
+                        "minimum": 1,
+                        "maximum": MAX_FORKS,
                     },
                     "background": {
                         "type": "boolean",
@@ -189,6 +200,17 @@ def _get_tools() -> list[Tool]:
                     "inventory": {
                         "type": "string",
                         "default": "school",
+                    },
+                    "forks": {
+                        "type": "integer",
+                        "description": (
+                            "Hosts worked on in parallel (ansible -f). Omit it to keep "
+                            "the configured value, 5 unless ansible.cfg or ANSIBLE_FORKS "
+                            "say otherwise; set it to the number of hosts to run a whole "
+                            "lab at once instead of five at a time."
+                        ),
+                        "minimum": 1,
+                        "maximum": MAX_FORKS,
                     },
                     "timeout": {
                         "type": "integer",
@@ -336,6 +358,10 @@ async def _run_powershell(ctx: ServerRequestContext, arguments: dict) -> CallToo
         return fail("Error: l is required: name the host or group to run on")
 
     inventory: str = arguments.get("inventory", "school")
+    forks = arguments.get("forks")
+    error = validate_forks(forks)
+    if error:
+        return fail(f"Error: {error}")
     missing = _missing_config(inventory)
     if missing:
         return fail(missing)
@@ -364,6 +390,7 @@ async def _run_powershell(ctx: ServerRequestContext, arguments: dict) -> CallToo
         error_action=arguments.get("error_action", "stop"),
         read_only=arguments.get("read_only", True),
         chdir=arguments.get("chdir"),
+        forks=forks,
     )
     label = f"ps-{l}"
     timeout = int(arguments.get("timeout", 300))
@@ -413,8 +440,12 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
         l: str = arguments.get("l", "all")
         e: dict = arguments.get("e") or {}
         inventory: str = arguments.get("inventory", "school")
+        forks = arguments.get("forks")
+        error = validate_forks(forks)
+        if error:
+            return CallToolResult(content=[TextContent(type="text", text=f"Error: {error}")])
 
-        cmd = build_playbook_command(playbook, l, e or None, inventory)
+        cmd = build_playbook_command(playbook, l, e or None, inventory, forks)
         label = f"{playbook}-{l}"
 
         if arguments.get("background", False):

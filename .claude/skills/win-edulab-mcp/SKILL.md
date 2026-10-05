@@ -76,6 +76,12 @@ the same as running synchronously: `background=true` buys nothing and the chat s
 busy until the run ends. Use it only when the very next action depends on the result and
 nothing else can usefully happen meanwhile. `run_status` reads a run *without* waiting.
 
+**A whole lab runs five hosts at a time unless told otherwise.** `run_tasks`,
+`run_playbook` and `run_powershell` take `forks`, passed as `-f`: set it to the number of
+hosts when the run is long on each one (a Windows Update, a large install), e.g.
+`run_tasks(t=["wu-run"], inventory="spalla_info2", forks=29, background=true)`. Omitted,
+Ansible's configured value applies, 5 by default.
+
 
 ---
 

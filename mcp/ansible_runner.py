@@ -5,17 +5,34 @@ from runlog import NotifyFn, RunResult, RunStatus, await_run, read_log, run_logg
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# Each fork is a Python process on the controller holding a connection open.
+MAX_FORKS = 100
+
+
+def validate_forks(forks) -> str | None:
+    """Return an error message if forks is not a usable -f value, else None."""
+    if forks is None:
+        return None
+    if isinstance(forks, bool) or not isinstance(forks, int):
+        return "forks must be an integer"
+    if not 1 <= forks <= MAX_FORKS:
+        return f"forks must be between 1 and {MAX_FORKS}"
+    return None
+
 
 def build_playbook_command(
     playbook: str,
     l: str = "all",
     e: dict | None = None,
     inventory: str = "school",
+    forks: int | None = None,
 ) -> list[str]:
     cmd = ["ansible-playbook"]
     cmd += ["-i", str(PROJECT_ROOT / "inventories" / inventory / "hosts.yaml")]
     if l and l != "all":
         cmd += ["-l", l]
+    if forks is not None:
+        cmd += ["-f", str(forks)]
     cmd += [str(PROJECT_ROOT / "playbooks" / f"{playbook}.yaml")]
     if e:
         cmd += ["-e", json.dumps(e)]

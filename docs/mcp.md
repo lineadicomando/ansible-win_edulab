@@ -186,6 +186,7 @@ the collection playbook `lineadicomando.win_workman.win_workman`.
 | `t` | string[] | yes | — | Task list, e.g. `["chrome"]` or `["chkdsk", "sfc"]` |
 | `l` | string | no | `all` | Ansible limit: hostname or group name |
 | `inventory` | string | no | `school` | Inventory name under `inventories/` |
+| `forks` | integer | no | — | Hosts worked on in parallel (`-f`); omitted, Ansible's configured value applies (5 by default) |
 | `preview` | boolean | no | `false` | Return the command without executing it |
 | `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
@@ -268,6 +269,7 @@ the `win_workman` role (e.g. `veyon`, `wol`, `seb_classroom`, `autologon`).
 | `l` | string | no | `all` | Ansible limit |
 | `e` | object | no | `{}` | Extra vars passed as `-e '{...}'`, e.g. `{"target_hosts": "students"}` |
 | `inventory` | string | no | `school` | Inventory name |
+| `forks` | integer | no | — | Hosts worked on in parallel (`-f`); omitted, Ansible's configured value applies (5 by default) |
 | `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
 **Available playbooks:** `autologon`, `gcpw`, `lab_cad`, `lab_coding`, `maintenance`,
@@ -297,6 +299,7 @@ keeps its secrets out of them, which a hand-typed `ansible -m win_shell` does no
 | `chdir` | string | no | — | PowerShell location to set first |
 | `confirm` | bool | no | `false` | Required when the pattern selects more than 3 hosts |
 | `inventory` | string | no | `school` | Inventory name |
+| `forks` | int | no | — | Hosts worked on in parallel (`-f`); omitted, Ansible's configured value applies (5 by default) |
 | `timeout` | int | no | `300` | Seconds before the run is killed |
 | `background` | bool | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
