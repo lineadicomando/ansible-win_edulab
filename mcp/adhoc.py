@@ -48,6 +48,7 @@ def build_powershell_command(
     error_action: str = "stop",
     read_only: bool = True,
     chdir: str | None = None,
+    forks: int | None = None,
 ) -> list[str]:
     """An `ansible -m win_powershell` command line for one script."""
     if read_only:
@@ -67,7 +68,7 @@ def build_powershell_command(
     if chdir:
         args["chdir"] = _protect_templating(chdir)
 
-    return [
+    cmd = [
         "ansible",
         "-i", str(PROJECT_ROOT / "inventories" / inventory / "hosts.yaml"),
         l,
@@ -75,6 +76,9 @@ def build_powershell_command(
         # JSON module args: the script survives quotes, $ and newlines intact.
         "-a", json.dumps(args),
     ]
+    if forks is not None:
+        cmd += ["-f", str(forks)]
+    return cmd
 
 
 # A raw block ends at the first endraw tag and treats the rest as literal
