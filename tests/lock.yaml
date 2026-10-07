@@ -1,0 +1,474 @@
+---
+# Test for lock: maintenance mode saves what it changes and gives it back.
+#
+#   ansible-playbook tests/lock.yaml
+#   ansible-playbook tests/lock.yaml -e vm_host=student01
+#
+# From the baseline snapshot, on one host with a user logged on and then
+# disconnected, and a legal notice of its own:
+#   1. lock-off on a host never locked changes nothing
+#   2. lock-on: banner, hidden last username, logon right restricted, state
+#      saved, the Disconnected session logged off
+#   3. lock-on again with another title: banner updated, saved state untouched
+#   4. lock-off: notice, last username setting and logon right as before,
+#      saved state gone
+#   5. lock-off again changes nothing
+#   6. an empty win_workman_mode_interactive_logon_users is refused
+#   7. win_workman_mode_interactive_logon_users set at play level is honoured
+#   8. lock-off with an empty saved logon right unlocks with the fallback users
+#   9. lock-off with the saved state lost changes nothing; lock-reset unlocks
+#      with the Windows defaults
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: ["{{ vm_host | default('teacher') }}"]
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake target VM
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ vm_host | default('teacher') }}"
+
+- name: Maintenance mode - lock
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    lock_test_caption: "Site notice"
+    lock_test_text: "This PC belongs to the test lab."
+    lock_test_policies: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+    lock_test_site_state:
+      Caption: "{{ lock_test_caption }}"
+      Text: "{{ lock_test_text }}"
+      LastUserName: ~
+      Saved: []
+  tasks:
+    - name: Authorize SSH
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [secure_ssh]
+
+    # Before the host gets its notice: a legal notice holds autologon at the
+    # logon screen until someone confirms it
+    - name: Log on as {{ ansible_user }}
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_autologon_restart: true
+        win_workman_tasks: [autologon-on]
+
+    - name: Wait for the desktop of {{ ansible_user }}
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$User, [int]$TimeoutSec)
+          $Ansible.Changed = $false
+          $deadline = (Get-Date).AddSeconds($TimeoutSec)
+          do {
+            $shell = Get-Process explorer -IncludeUserName -ErrorAction SilentlyContinue |
+              Where-Object { $_.UserName -match "\\$User$" }
+            if ($shell) { return }
+            Start-Sleep -Seconds 5
+          } while ((Get-Date) -lt $deadline)
+          $Ansible.Failed = $true
+        parameters:
+          User: "{{ ansible_user }}"
+          TimeoutSec: 600
+
+    # No autologon from here on, or the logoff would log the user back on
+    - name: Turn autologon off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [autologon-off]
+
+    - name: List the sessions
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: user_sessions
+
+    # Disconnected is the state the logoff used to miss
+    - name: Disconnect the session
+      ansible.windows.win_powershell:
+        script: |
+          param([int]$SessionId)
+          tsdiscon $SessionId
+          if ($LASTEXITCODE -ne 0) { throw "tsdiscon $SessionId exited $LASTEXITCODE" }
+        parameters:
+          SessionId: "{{ win_workman_user_sessions[0].SessionId }}"
+
+    - name: Give the host a legal notice of its own
+      ansible.windows.win_regedit:
+        path: "{{ lock_test_policies }}"
+        name: "{{ item.name }}"
+        data: "{{ item.data }}"
+        type: string
+      loop:
+        - { name: LegalNoticeCaption, data: "{{ lock_test_caption }}" }
+        - { name: LegalNoticeText, data: "{{ lock_test_text }}" }
+
+    - name: Make sure DontDisplayLastUserName is not set
+      ansible.windows.win_regedit:
+        path: "{{ lock_test_policies }}"
+        name: DontDisplayLastUserName
+        state: absent
+
+    - &read_state
+      name: Read the state lock works on
+      block:
+        - name: Read notice, last username setting and saved state
+          ansible.windows.win_powershell:
+            script: |
+              $Ansible.Changed = $false
+              $policies = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+              $saved = @()
+              if (Test-Path 'HKLM:\SOFTWARE\Ansible\WinMaint') {
+                $saved = @((Get-Item 'HKLM:\SOFTWARE\Ansible\WinMaint').GetValueNames() | Sort-Object)
+              }
+              $Ansible.Result = @{
+                Caption      = $policies.LegalNoticeCaption
+                Text         = $policies.LegalNoticeText
+                LastUserName = $policies.DontDisplayLastUserName
+                Saved        = $saved
+              }
+            error_action: stop
+          register: lock_test_read
+
+        - name: Read who may log on
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.pkg_utils
+            tasks_from: se_read
+          vars:
+            win_workman_se_read_right: SeInteractiveLogonRight
+
+        - name: Keep the state
+          ansible.builtin.set_fact:
+            lock_test_state: "{{ lock_test_read.result }}"
+            lock_test_right: "{{ win_workman_se_read.result | sort }}"
+
+    - name: Keep the logon right of the unlocked host
+      ansible.builtin.set_fact:
+        lock_test_site_right: "{{ lock_test_right }}"
+
+    - name: Assert the starting point
+      ansible.builtin.assert:
+        that:
+          - lock_test_state == lock_test_site_state
+          - lock_test_site_right | length > 1
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+    # 1
+    - name: Lock-off on a host never locked
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-off]
+
+    - *read_state
+
+    - name: Assert nothing changed
+      ansible.builtin.assert:
+        that:
+          - lock_test_state == lock_test_site_state
+          - lock_test_right == lock_test_site_right
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+    # 2
+    - name: List the sessions before the lock
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: user_sessions
+
+    - name: Assert a Disconnected session is there to log off
+      ansible.builtin.assert:
+        that:
+          - win_workman_user_sessions | length == 1
+          - win_workman_user_sessions[0].State == 'Disconnected'
+        fail_msg: "Sessions: {{ win_workman_user_sessions }}"
+
+    - name: Lock-on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-on]
+        win_workman_mode_title: "First title"
+        win_workman_mode_text: "First text"
+
+    - *read_state
+
+    - name: List the sessions after the lock
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: user_sessions
+
+    - name: Assert the host is locked and its state saved
+      ansible.builtin.assert:
+        that:
+          - lock_test_state.Caption == 'First title'
+          - lock_test_state.Text == 'First text'
+          - lock_test_state.LastUserName == 1
+          - lock_test_right | length == 1
+          - lock_test_right[0] is search('Administrators$')
+          - >-
+            lock_test_state.Saved == ['DontDisplayLastUserName', 'LegalNoticeCaption',
+            'LegalNoticeCaptionExists', 'LegalNoticeText', 'LegalNoticeTextExists',
+            'SeInteractiveLogonRight']
+          - win_workman_user_sessions | length == 0
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }} - sessions: {{ win_workman_user_sessions }}"
+
+    # 3
+    - name: Lock-on again with another title
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-on]
+        win_workman_mode_title: "Second title"
+        win_workman_mode_text: "Second text"
+
+    - *read_state
+
+    - name: Assert the banner changed and the host is still locked
+      ansible.builtin.assert:
+        that:
+          - lock_test_state.Caption == 'Second title'
+          - lock_test_state.Text == 'Second text'
+          - lock_test_right | length == 1
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+    # 4
+    - name: Lock-off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-off]
+
+    - *read_state
+
+    - name: Assert everything is as before the lock
+      ansible.builtin.assert:
+        that:
+          - lock_test_state == lock_test_site_state
+          - lock_test_right == lock_test_site_right
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }} (was {{ lock_test_site_right }})"
+
+    # 5
+    - name: Lock-off again
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-off]
+
+    - *read_state
+
+    - name: Assert nothing changed
+      ansible.builtin.assert:
+        that:
+          - lock_test_state == lock_test_site_state
+          - lock_test_right == lock_test_site_right
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+    # 6
+    - name: An empty list of users is refused
+      block:
+        - name: Lock-on with nobody allowed to log on
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks: [lock-on]
+            win_workman_mode_interactive_logon_users: []
+
+        - name: Record that it was accepted
+          ansible.builtin.set_fact:
+            lock_test_empty_accepted: true
+      rescue:
+        - name: Record that it was refused
+          ansible.builtin.set_fact:
+            lock_test_empty_accepted: false
+      always:
+        - name: Unlock
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks: [lock-off]
+
+    - *read_state
+
+    - name: Assert it was refused and the logon right never touched
+      ansible.builtin.assert:
+        that:
+          - not lock_test_empty_accepted
+          - lock_test_state == lock_test_site_state
+          - lock_test_right == lock_test_site_right
+        fail_msg: "Accepted: {{ lock_test_empty_accepted }} - state: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+# A play of its own: play vars rank below role vars, which is where the variable
+# used to be pinned, while the task vars used above would win either way
+- name: Maintenance mode - users allowed to log on, set at play level
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    win_workman_mode_interactive_logon_users:
+      - Administrators
+      - Users
+  tasks:
+    # 7
+    - name: Lock-on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-on]
+
+    - name: Read who may log on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: se_read
+      vars:
+        win_workman_se_read_right: SeInteractiveLogonRight
+
+    - name: Keep the logon right of the locked host
+      ansible.builtin.set_fact:
+        lock_test_locked_right: "{{ win_workman_se_read.result | sort }}"
+
+    - name: Lock-off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-off]
+
+    - name: Read who may log on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.pkg_utils
+        tasks_from: se_read
+      vars:
+        win_workman_se_read_right: SeInteractiveLogonRight
+
+    - name: Assert both groups were allowed, and the right is back
+      ansible.builtin.assert:
+        that:
+          - lock_test_locked_right | length == 2
+          - lock_test_locked_right | select('search', 'Users$') | list | length == 1
+          - win_workman_se_read.result | sort == lock_test_site_right
+        fail_msg: "Locked: {{ lock_test_locked_right }} - now: {{ win_workman_se_read.result }} (was {{ lock_test_site_right }})"
+
+- name: Maintenance mode - unlocking without a usable saved state
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    lock_test_policies: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+    lock_test_fallback_right:
+      - BUILTIN\Administrators
+      - BUILTIN\Backup Operators
+      - BUILTIN\Users
+  tasks:
+    # 8
+    - name: Lock-on before emptying the saved logon right
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-on]
+
+    # win_regedit takes an empty list as no data and leaves the value alone
+    - name: Empty the saved logon right
+      ansible.windows.win_powershell:
+        script: |
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ansible\WinMaint' -Name SeInteractiveLogonRight -Value ([string[]]@()) -Type MultiString
+          $saved = @((Get-Item 'HKLM:\SOFTWARE\Ansible\WinMaint').GetValue('SeInteractiveLogonRight'))
+          if ($saved.Count -ne 0) { throw "still $($saved.Count) entries" }
+        error_action: stop
+
+    - name: Lock-off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-off]
+
+    - &read_unlocked
+      name: Read the state lock works on
+      block:
+        - name: Read notice, last username setting and saved state
+          ansible.windows.win_powershell:
+            script: |
+              $Ansible.Changed = $false
+              $policies = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+              $saved = @()
+              if (Test-Path 'HKLM:\SOFTWARE\Ansible\WinMaint') {
+                $saved = @((Get-Item 'HKLM:\SOFTWARE\Ansible\WinMaint').GetValueNames() | Sort-Object)
+              }
+              $Ansible.Result = @{
+                Caption      = $policies.LegalNoticeCaption
+                Text         = $policies.LegalNoticeText
+                LastUserName = $policies.DontDisplayLastUserName
+                Saved        = $saved
+              }
+            error_action: stop
+          register: lock_test_read
+
+        - name: Read who may log on
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.pkg_utils
+            tasks_from: se_read
+          vars:
+            win_workman_se_read_right: SeInteractiveLogonRight
+
+        - name: Keep the state
+          ansible.builtin.set_fact:
+            lock_test_state: "{{ lock_test_read.result }}"
+            lock_test_right: "{{ win_workman_se_read.result | sort }}"
+
+    - name: Assert the host is unlocked with the fallback users
+      ansible.builtin.assert:
+        that:
+          - lock_test_state.Caption == 'Site notice'
+          - lock_test_state.LastUserName is none
+          - lock_test_state.Saved == []
+          - lock_test_right == lock_test_fallback_right
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+    # 9
+    - name: Lock-on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-on]
+
+    - name: Lose the saved state
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Ansible\WinMaint
+        state: absent
+        delete_key: true
+
+    - name: Lock-off
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-off]
+
+    - *read_unlocked
+
+    - name: Assert the host is still locked
+      ansible.builtin.assert:
+        that:
+          - lock_test_state.Caption == 'Maintenance in progress'
+          - lock_test_state.LastUserName == 1
+          - lock_test_right | length == 1
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"
+
+    - name: Lock-reset
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [lock-reset]
+
+    - *read_unlocked
+
+    - name: Assert every setting is at its Windows default
+      ansible.builtin.assert:
+        that:
+          - lock_test_state.Caption == ''
+          - lock_test_state.Text == ''
+          - lock_test_state.LastUserName is none
+          - lock_test_state.Saved == []
+          - lock_test_right == lock_test_fallback_right
+        fail_msg: "State: {{ lock_test_state }} - right: {{ lock_test_right }}"

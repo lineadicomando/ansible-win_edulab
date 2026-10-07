@@ -59,7 +59,7 @@ Via MCP use `run_tasks` instead of calling the playbook directly — see the **w
 | `playbooks/veyon.yaml` | `lab_win` | Full Veyon setup (keypair + config + network objects) |
 | `playbooks/seb_classroom.yaml` | `students` | SEB configuration for Google Classroom |
 | `playbooks/gcpw.yaml` | `lab_win` | Google Credential Provider for Windows |
-| `playbooks/maintenance.yaml` | `lab_win` | Routine maintenance cycle: updates and cleanup |
+| `playbooks/maintenance.yaml` | `lab_win` | Routine maintenance cycle: disk, component store and system file checks (no Windows Update) |
 | `playbooks/autologon.yaml` | `lab_win` | Hardcoded autologon with restart |
 | `playbooks/wol.yaml` | `lab_win` | Wake-on-LAN broadcast |
 | `playbooks/shutdown.yaml` | `lab_win` | Shut the lab down |

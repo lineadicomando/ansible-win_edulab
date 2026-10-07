@@ -206,6 +206,10 @@ today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one r
 | `autologon` | Enable automatic logon | Disable automatic logon |
 | `ms_account` | Block Microsoft account sign-in | Allow Microsoft account sign-in |
 
+`lock-off` only gives back what `lock-on` saved, and changes nothing on a host that is not
+locked. `lock-reset` unlocks a host whose saved state was lost: it restores nothing and sets
+the legal notice, the last username setting and the logon right to their Windows defaults.
+
 ---
 
 ## Calling the dispatcher from a playbook

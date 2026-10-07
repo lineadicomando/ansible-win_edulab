@@ -101,8 +101,14 @@ ansible-playbook playbooks/veyon.yaml
 ### `maintenance.yaml` — Routine maintenance
 
 Wakes the workstations, logs users off and locks the logon screen with a
-maintenance notice, then runs CHKDSK, the WIM component store check, SFC and
-disk optimization. A second play unlocks the workstations and restarts them.
+maintenance notice, restarts those with a reboot pending, then runs CHKDSK,
+the component store scan (DISM ScanHealth), SFC and disk optimization. It does
+not run Windows Update.
+
+The unlock and the final restart run whatever the checks find: a workstation
+that fails one of them skips the checks after it and shows as failed in the
+recap, but is not left locked. Only a host that becomes unreachable half-way
+stays locked; `lock-off` through `win_wm.yaml` unlocks it once it is back.
 
 ```bash
 ansible-playbook playbooks/maintenance.yaml

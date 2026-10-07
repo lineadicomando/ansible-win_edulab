@@ -165,7 +165,6 @@
     - name: Assert the host is still on
       ansible.windows.win_ping:
 
-    # The logoff role only logs off Active sessions
     - name: Log the disconnected session off
       ansible.windows.win_powershell:
         script: |

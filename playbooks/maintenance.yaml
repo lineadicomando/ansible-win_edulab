@@ -1,27 +1,37 @@
 ---
-- name: Routine maintenance — Updates and system cleanup
+# The checks run in a block and the unlock in its always section: a workstation
+# that fails one of them still ends up failed in the recap, but is not left
+# with logon restricted to administrators. wol stays outside the block, so a
+# host that never woke up is not chased for an unlock it does not need.
+- name: Routine maintenance — disk, component store and system file checks
   hosts: "{{ target_hosts | default('lab_win') }}"
   gather_facts: false
-  roles:
-    - role: lineadicomando.win_workman.dispatcher
+  tasks:
+    - name: Wake the workstations
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
       vars:
         win_workman_tasks:
           - "wol"
-          - "logoff"
-          - "lock"
-          - "chkdsk"
-          - "wim"
-          - "sfc"
-          - "optimize"
-        win_workman_mode_title: "Maintenance in progress"
-        win_workman_mode_text: "Do not turn off the PC. Maintenance is almost complete."
 
-- name: Routine maintenance — Unlock workstations
-  hosts: "{{ target_hosts | default('lab_win') }}"
-  gather_facts: false
-  roles:
-    - role: lineadicomando.win_workman.dispatcher
-      vars:
-        win_workman_tasks:
-          - "lock-off"
-          - "restart"
+    - name: Maintenance with the workstation locked
+      block:
+        - name: Lock and check
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks:
+              - "lock"
+              - "restart-if-pending"
+              - "chkdsk"
+              - "wim-scan"
+              - "sfc"
+              - "optimize"
+      always:
+        - name: Unlock and restart
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks:
+              - "lock-off"
+              - "restart"

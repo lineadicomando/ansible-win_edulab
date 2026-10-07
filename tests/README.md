@@ -21,6 +21,7 @@ tests/
   veyon.yaml           # Veyon deployment test
   shutdown_if_nouser.yaml # shutdown-if-nouser: stays on with an Active or Disconnected session, shuts down without
   autoshutdown.yaml    # autoshutdown: schedule forms, validation, off; the task fires daily and weekly, and not on other days
+  lock.yaml            # lock: on/off give back notice, last username setting and logon right; repeated calls, fallback users, reset
 ```
 
 ## Test environment
