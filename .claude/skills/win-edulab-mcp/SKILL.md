@@ -200,7 +200,7 @@ when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather tha
 | `wol` | `lab_win` | yes | Wake-on-LAN broadcast across the inventory |
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
-| `maintenance` | `lab_win` | yes | System maintenance: wol → logoff → lock → chkdsk → wim → sfc → optimize → unlock → restart (no Windows Update) |
+| `maintenance` | `lab_win` | yes | System maintenance: wol → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
 | `samba_dc_build` | `samba_ad_dc` | yes | Build a new Samba AD Domain Controller |
 | `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
@@ -381,7 +381,7 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 ```json
 { "playbook": "maintenance", "inventory": "ario_info", "preview": true }
 ```
-Runs in sequence: wol, logoff, lock, chkdsk, wim, sfc, optimize, then unlock and restart. It does not run Windows Update: use `wu-run` (security) or `wu-run-full` through `run_tasks`.
+Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, wim-scan, sfc, optimize, then unlock and restart. A host that fails a check skips the ones after it and is reported failed, but is still unlocked and restarted. It does not run Windows Update: use `wu-run` (security) or `wu-run-full` through `run_tasks`.
 
 ### See what Windows Update offers, then install an optional feature update
 ```json

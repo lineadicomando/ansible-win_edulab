@@ -300,7 +300,7 @@ servicing (TrustedInstaller, TiWorker) has stayed idle for 20 seconds, so a rebo
 Windows starts on its own to finish updates is waited out rather than hit by the
 next task.
 
-### logoff — force logoff all interactive sessions
+### logoff — force logoff every user session
 
 ```yaml
 - ansible.builtin.include_role:
