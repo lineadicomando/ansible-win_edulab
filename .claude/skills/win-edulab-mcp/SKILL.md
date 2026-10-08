@@ -200,7 +200,7 @@ when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather tha
 | `wol` | `lab_win` | yes | Wake-on-LAN broadcast across the inventory |
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
-| `maintenance` | `lab_win` | yes | System maintenance: wol → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
+| `maintenance` | `lab_win` | yes | System maintenance: wol (skipped on hosts with no `ansible_mac`) → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
 | `samba_dc_build` | `samba_ad_dc` | yes | Build a new Samba AD Domain Controller |
 | `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |

@@ -2,7 +2,9 @@
 # The checks run in a block and the unlock in its always section: a workstation
 # that fails one of them still ends up failed in the recap, but is not left
 # with logon restricted to administrators. wol stays outside the block, so a
-# host that never woke up is not chased for an unlock it does not need.
+# host that never woke up is not chased for an unlock it does not need. A host
+# with no ansible_mac in the inventory skips it: a lab of laptops on Wi-Fi
+# cannot be woken, and is maintained as it is found, already switched on.
 - name: Routine maintenance — disk, component store and system file checks
   hosts: "{{ target_hosts | default('lab_win') }}"
   gather_facts: false
@@ -13,6 +15,7 @@
       vars:
         win_workman_tasks:
           - "wol"
+      when: ansible_mac is defined
 
     - name: Maintenance with the workstation locked
       block:
