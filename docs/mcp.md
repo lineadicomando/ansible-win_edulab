@@ -5,7 +5,7 @@ this project to Claude Code. It lets you manage lab workstations in natural lang
 "install Chrome on teacher", "run chkdsk on all students", and so on.
 
 It works alongside two servers shipped with the collections: **win-workman**
-(`run_tasks`, `get_role_info`) and **samba-ad-dc** (`samba`, `samba_dc_backup`,
+(`run_tasks`, `get_role_info`) and **samba-dc** (`samba`, `samba_dc_backup`,
 `samba_win_status`). Their tools are documented here too, since the three are
 used together.
 
@@ -102,9 +102,9 @@ cp .mcp.json.example .mcp.json
         "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
       }
     },
-    "samba-ad-dc": {
+    "samba-dc": {
       "command": "python3",
-      "args": ["/path/to/ansible-collection-samba_ad_dc/mcp/server.py"],
+      "args": ["/path/to/ansible-collection-samba_dc/mcp/server.py"],
       "env": {
         "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
       }
@@ -157,19 +157,19 @@ tracked by git; site-specific inventories next to it are gitignored.
 ```json
 {
   "hosts": {
-    "samba_ad_dc": { "ansible_host": "192.168.122.2",  "ansible_mac": "52:54:00:38:64:a0" },
+    "dc01":        { "ansible_host": "192.168.122.2",  "ansible_mac": "52:54:00:38:64:a0" },
     "teacher":     { "ansible_host": "192.168.122.10", "ansible_mac": "52:54:00:1c:82:8e" },
     "student01":   { "ansible_host": "192.168.122.11", "ansible_mac": "52:54:00:a6:db:78" },
     "student02":   { "ansible_host": "192.168.122.12", "ansible_mac": "52:54:00:bf:d8:d6" }
   },
   "groups": {
-    "servers":   ["samba_ad_dc"],
+    "servers":   ["dc01"],
     "teachers":  ["teacher"],
     "students":  ["student01", "student02"],
     "lab_cad":   ["teacher", "student01", "student02"],
     "lab_coding": ["teacher", "student01", "student02"],
     "lab_win":   ["teacher", "student01", "student02"],
-    "samba_dc":  ["samba_ad_dc"]
+    "samba_dc":  ["dc01"]
   }
 }
 ```
@@ -349,8 +349,8 @@ start runs (win-edulab and win-workman) expose them. See
 
 ### `samba`
 
-*Server: samba-ad-dc.* Manages the Samba AD Domain Controller via `samba-tool`,
-through the `lineadicomando.samba_ad_dc.samba` playbook. Requires the `samba_ad_dc`
+*Server: samba-dc.* Manages the Samba AD Domain Controller via `samba-tool`,
+through the `lineadicomando.samba_dc.samba` playbook. Requires the `samba_dc`
 collection installed in the Ansible environment and the DC present in the
 inventory; `l` should target a single DC.
 
@@ -381,14 +381,14 @@ before executing.
 ```
 Tool call: samba(object="user", action="create",
                  args={"name": "alice", "password": "..."},
-                 l="samba_ad_dc", preview=true)
+                 l="dc01", preview=true)
 
 Response:
   Command to run:
 
-    ansible-playbook lineadicomando.samba_ad_dc.samba \
+    ansible-playbook lineadicomando.samba_dc.samba \
       -i '/path/to/ansible-win_edulab/inventories/school/hosts.yaml' \
-      -e '{"samba_tool_object": "user", "samba_tool_action": "create", ..., "target_hosts": "samba_ad_dc"}'
+      -e '{"samba_tool_object": "user", "samba_tool_action": "create", ..., "target_hosts": "dc01"}'
 
   No command executed.
 ```
@@ -397,8 +397,8 @@ Response:
 
 ### `samba_dc_backup`
 
-*Server: samba-ad-dc.* Backs up or restores the domain controller through the
-`lineadicomando.samba_ad_dc.samba_dc_backup` playbook.
+*Server: samba-dc.* Backs up or restores the domain controller through the
+`lineadicomando.samba_dc.samba_dc_backup` playbook.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -419,8 +419,8 @@ Response:
 
 ### `samba_win_status`
 
-*Server: samba-ad-dc.* Reports whether each Windows host is joined to an AD domain or
-a workgroup, and which one, through the `lineadicomando.samba_ad_dc.samba_win_status`
+*Server: samba-dc.* Reports whether each Windows host is joined to an AD domain or
+a workgroup, and which one, through the `lineadicomando.samba_dc.samba_win_status`
 playbook. Read-only. Accepts `l`, `inventory` and `preview`.
 
 ---
@@ -611,7 +611,7 @@ mcp/
   max_lines, notify)` — read a run's log now, or once it ends
 
 The `run_tasks` and `samba` tools documented above belong to the `win-workman` and
-`samba-ad-dc` MCP servers, which live in their own collections and keep their own
+`samba-dc` MCP servers, which live in their own collections and keep their own
 command builders.
 
 ### `runlog.py`

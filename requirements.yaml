@@ -4,6 +4,6 @@ collections:
     type: git
     version: main
 
-  - name: git+https://github.com/lineadicomando/ansible-collection-samba_ad_dc.git
+  - name: git+https://github.com/lineadicomando/ansible-collection-samba_dc.git
     type: git
     version: main

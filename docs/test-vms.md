@@ -127,7 +127,7 @@ addresses matter as well — the `wol` role sends its magic packet to
 
 | Inventory host | VM name          | IP               | MAC                 |
 |----------------|------------------|------------------|---------------------|
-| `samba_ad_dc`  | `deb13-samba-dc` | `192.168.122.2`  | `52:54:00:38:64:a0` |
+| `dc01`         | `deb13-samba-dc` | `192.168.122.2`  | `52:54:00:38:64:a0` |
 | `teacher`      | `win11-pc00`     | `192.168.122.10` | `52:54:00:1c:82:8e` |
 | `student01`    | `win11-pc01`     | `192.168.122.11` | `52:54:00:a6:db:78` |
 | `student02`    | `win11-pc02`     | `192.168.122.12` | `52:54:00:bf:d8:d6` |

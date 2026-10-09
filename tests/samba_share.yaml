@@ -36,7 +36,7 @@
 
     - name: Create the shared folder
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: share
         samba_tool_action: create
@@ -56,7 +56,7 @@
 
     - name: Create it again
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: share
         samba_tool_action: create
@@ -194,7 +194,7 @@
   tasks:
     - name: Revoke Students
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: share
         samba_tool_action: revoke
@@ -239,7 +239,7 @@
   tasks:
     - name: Delete the share and its data
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: share
         samba_tool_action: delete
@@ -248,7 +248,7 @@
           delete_data: true
 
     - name: Read what is left
-      lineadicomando.samba_ad_dc.samba_share_info:
+      lineadicomando.samba_dc.samba_share_info:
         name: "{{ share_test_name }}"
       register: share_test_left
 

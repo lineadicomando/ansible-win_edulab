@@ -2,14 +2,14 @@
 - name: Revert to baseline
   ansible.builtin.import_playbook: virsh.yaml
   vars:
-    vm: samba_ad_dc
+    vm: dc01
     cmd: snapshot-revert
     snapshot: baseline
 
 - name: Wake host
   ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
-    target_hosts: samba_ad_dc
+    target_hosts: dc01
 
 - name: Build Samba AD DC
   ansible.builtin.import_playbook: ../playbooks/samba_dc_build.yaml

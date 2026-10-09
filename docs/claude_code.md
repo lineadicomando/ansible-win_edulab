@@ -28,6 +28,6 @@ The three MCP servers that expose the project to Claude Code are:
 
 - **win-edulab** — this project's server, in `mcp/`
 - **win-workman** — shipped with the `lineadicomando.win_workman` collection
-- **samba-ad-dc** — shipped with the `lineadicomando.samba_ad_dc` collection
+- **samba-dc** — shipped with the `lineadicomando.samba_dc` collection
 
 For complete documentation on how to install, configure, and extend the MCP servers, refer to the [mcp.md](mcp.md) file.
