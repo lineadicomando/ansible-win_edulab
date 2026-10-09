@@ -74,6 +74,36 @@
           Hosts risolti: {{ vm_hosts }}
           VM names: {{ vm_names }}
 
+    # A libvirt network that is not active has no bridge on the host: the VM
+    # cannot start, and the magic packet of the wake step that follows is sent
+    # to a broadcast address the host no longer owns, so it never reaches the
+    # Wake-on-LAN listener. This is the state of a freshly booted host where
+    # the libvirt network daemon is socket-activated.
+    - name: List the active libvirt networks
+      ansible.builtin.command:
+        cmd: virsh net-list --name
+      register: vm_net_active
+      changed_when: false
+
+    - name: List the network interfaces of the selected VMs
+      ansible.builtin.command:
+        cmd: "virsh domiflist {{ item }}"
+      loop: "{{ vm_names }}"
+      register: vm_iflist
+      changed_when: false
+
+    - name: Start the libvirt networks of the selected VMs that are not active
+      ansible.builtin.command:
+        cmd: "virsh net-start {{ item }}"
+      loop: >-
+        {{
+          vm_iflist.results | map(attribute='stdout_lines') | flatten
+          | map('split') | selectattr('1', 'defined') | selectattr('1', 'eq', 'network')
+          | map(attribute='2') | unique
+          | difference(vm_net_active.stdout_lines)
+        }}
+      changed_when: true
+
     - name: Revert selected snapshot for selected VMs
       ansible.builtin.command:
         cmd: "virsh {{ params }}"
