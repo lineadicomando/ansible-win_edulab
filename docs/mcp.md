@@ -184,14 +184,17 @@ the collection playbook `lineadicomando.win_workman.win_workman`.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `t` | string[] | yes | — | Task list, e.g. `["chrome"]` or `["chkdsk", "sfc"]` |
-| `l` | string | no | `all` | Ansible limit: hostname or group name |
+| `l` | string | no | `lab_win` | Ansible limit: hostname or group name |
 | `inventory` | string | no | `school` | Inventory name under `inventories/` |
+| `extra_vars` | object | no | — | Role variables passed as Ansible extra vars; `t` and `ansible_*` are refused |
+| `sensitive_vars` | object | no | — | Role variables that are secrets: merged with `extra_vars`, kept off the command line and masked in the log (see [Secrets](#secrets)) |
 | `forks` | integer | no | — | Hosts worked on in parallel (`-f`); omitted, Ansible's configured value applies (5 by default) |
 | `preview` | boolean | no | `false` | Return the command without executing it |
 | `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
-The playbook runs on `hosts: all`, so leaving `l` at its default also targets the
-domain controller: always pass a Windows host or group such as `lab_win`.
+The playbook runs on `hosts: all` and the tool narrows it with `-l`. The default,
+`lab_win`, is the group of the Windows workstations; `all` would also reach the domain
+controller and has to be asked for explicitly.
 
 #### Task format
 
@@ -268,6 +271,7 @@ the `win_workman` role (e.g. `veyon`, `wol`, `seb_classroom`, `autologon`).
 | `playbook` | string | yes | — | Playbook name without `.yaml` extension |
 | `l` | string | no | `all` | Ansible limit |
 | `e` | object | no | `{}` | Extra vars passed as `-e '{...}'`, e.g. `{"target_hosts": "students"}` |
+| `sensitive_vars` | object | no | — | Extra vars that are secrets: merged with `e`, kept off the command line and masked in the log (see [Secrets](#secrets)) |
 | `inventory` | string | no | `school` | Inventory name |
 | `forks` | integer | no | — | Hosts worked on in parallel (`-f`); omitted, Ansible's configured value applies (5 by default) |
 | `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
@@ -356,7 +360,7 @@ inventory; `l` should target a single DC.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `object` | string | yes | — | `user`, `group`, `computer`, `ou`, `home` |
+| `object` | string | yes | — | `user`, `group`, `computer`, `ou`, `home`, `share` |
 | `action` | string | yes | — | samba-tool verb |
 | `args` | object | no | `{}` | Action-specific arguments; `name` is required for every action except `list` |
 | `l` | string | no | `all` | Host pattern, passed to the playbook as `target_hosts` |
@@ -410,7 +414,7 @@ Response:
 
 - `backup` — `targetdir` (required); `domain` (default `true`), `domain_type`
   (`online`/`offline`, default `offline`), `files` (default `true`), `files_paths`
-  (default `[/home]`). Always produces new archives and reports changed.
+  (default `[/home, /srv/samba]`). Always produces new archives and reports changed.
 - `restore` — **destructive**: rebuilds a DC from an archive. Requires
   `restore_backup_file`, `restore_targetdir`, `restore_newservername` and
   `restore_confirm: true`. Always preview first.
@@ -479,6 +483,27 @@ also appended to the tool result as `[log] …`, so the agent can point you at i
 
 Only the newest 50 logs are kept; older ones are dropped as new runs start.
 Set `ANSIBLE_MCP_LOG_DIR` to write them somewhere else.
+
+### Secrets
+
+The first line of a log is the command that ran, so that a run can be repeated by
+hand. A secret passed as an extra var would sit there, and in the process list of the
+control node for as long as the run lasts. The tools keep it out of both:
+
+| Tool | Where the secret goes |
+|------|-----------------------|
+| `run_tasks`, `run_playbook` | `sensitive_vars`, never `extra_vars` or `e` |
+| `run_powershell` | `sensitive_parameters` |
+| `samba`, `samba_dc_backup` | `args.password` and `args.domain_password`, recognised by the server |
+
+A run that carries one hands its extra vars to Ansible through a temporary file only
+its owner can read, removed when the run ends, and the log shows the command with the
+value replaced by `********`. The same masking applies to the output of the run and to
+a `preview`. `run_powershell` masks its `sensitive_parameters` in the log, but they
+still travel on the command line of `ansible`.
+
+`logs/` is created `0700` and each log `0600`: a log also records what the hosts
+answered.
 
 ### Waiting for a background run
 
