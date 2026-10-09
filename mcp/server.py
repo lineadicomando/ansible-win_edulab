@@ -15,7 +15,7 @@ from adhoc import (
     secret_values,
     summarise,
 )
-from ansible_runner import MAX_FORKS, build_playbook_command, run_command, run_raw, run_status, start_run, validate_forks, wait_run
+from ansible_runner import MAX_FORKS, build_playbook_command, merge_sensitive_vars, validate_sensitive_vars, run_command, run_raw, run_status, start_run, validate_forks, wait_run
 from runlog import NotifyFn, done_path, format_status
 from inventory import list_inventories, load_inventory
 from preflight import preflight
@@ -74,6 +74,17 @@ def _get_tools() -> list[Tool]:
                             "E.g. {\"target_hosts\": \"students\"}"
                         ),
                         "default": {},
+                    },
+                    "sensitive_vars": {
+                        "type": "object",
+                        "description": (
+                            "Extra vars that are secrets: passwords, licence codes, tokens. "
+                            "Same shape as 'e' and merged with it, but handed to "
+                            "ansible-playbook through a private file instead of the command "
+                            "line, and masked in the run log and in the output. "
+                            "E.g. {\"win_workman_autologon_password\": \"...\"}. "
+                            "Never put a secret in 'e'."
+                        ),
                     },
                     "inventory": {
                         "type": "string",
@@ -441,15 +452,17 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
         e: dict = arguments.get("e") or {}
         inventory: str = arguments.get("inventory", "school")
         forks = arguments.get("forks")
-        error = validate_forks(forks)
+        sensitive_vars = arguments.get("sensitive_vars")
+        error = validate_forks(forks) or validate_sensitive_vars(sensitive_vars)
         if error:
             return CallToolResult(content=[TextContent(type="text", text=f"Error: {error}")])
 
+        e, redact = merge_sensitive_vars(e, sensitive_vars)
         cmd = build_playbook_command(playbook, l, e or None, inventory, forks)
         label = f"{playbook}-{l}"
 
         if arguments.get("background", False):
-            path = start_run(cmd, label)
+            path = start_run(cmd, label, redact=redact)
             return CallToolResult(content=[TextContent(
                 type="text",
                 text=(
@@ -462,7 +475,7 @@ async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestPar
                 ),
             )])
 
-        output = await run_command(cmd, label, _progress_notifier(ctx))
+        output = await run_command(cmd, label, _progress_notifier(ctx), redact=redact)
         return CallToolResult(content=[TextContent(type="text", text=output)])
 
     if name == "run_powershell":
