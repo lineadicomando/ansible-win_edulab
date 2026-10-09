@@ -191,6 +191,23 @@ Not needed for standard roles without custom actions (e.g. `vlc`, `git`, `python
 when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather than
 `extra_vars: {"win_workman_usr_targets": [...]}`.
 
+`l` defaults to `lab_win`, the Windows workstations; `all` also reaches the domain
+controller and has to be asked for explicitly.
+
+Secrets — a password, a licence code — never go in `extra_vars` or in the `e` of
+`run_playbook`: pass them in `sensitive_vars`, an object of the same shape that both
+tools merge with the other variables. They reach Ansible through a private file instead
+of the command line and are masked in the log, in the output and in a preview:
+
+```json
+{ "t": ["autologon-on"], "l": "students",
+  "extra_vars": { "win_workman_autologon_username": "studente" },
+  "sensitive_vars": { "win_workman_autologon_password": "..." } }
+```
+
+The samba-dc tools do the same on their own for `args.password` and
+`args.domain_password`.
+
 **run_playbook** — for standalone playbooks with their own logic:
 
 | Playbook | Default target | Accepts `target_hosts` | Use |
@@ -202,7 +219,7 @@ when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather tha
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
 | `maintenance` | `lab_win` | yes | System maintenance: wol (skipped on hosts with no `ansible_mac`) → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
-| `samba_dc_build` | `dc01` | yes | Build a new Samba AD Domain Controller |
+| `samba_dc_build` | `samba_dc` | yes | Build a new Samba AD Domain Controller |
 | `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
 | `shutdown` | `lab_win` | yes | Shut the lab down |
 
@@ -262,7 +279,7 @@ Replicates the cockpit-samba-dc logic: creates the physical directory, sets the 
 | Argument | Default | Notes |
 |----------|---------|-------|
 | `name` | — | **required** — sAMAccountName of the user |
-| `home_base` | `/home/samba` | base path for home directories |
+| `home_base` | `/srv/samba/home` | base path for home directories, the one cockpit-samba-dc uses |
 | `home_drive` | `H:` | Windows drive letter |
 | `share_name` | `home` | SMB share name (created only if it does not exist) |
 
@@ -275,7 +292,7 @@ Examples:
 { "object": "user", "action": "present", "args": { "name": "alice", "password": "Secret123!" } }
 { "object": "group", "action": "addmembers", "args": { "name": "staff", "members": ["alice", "bob"] } }
 { "object": "home", "action": "provision", "args": { "name": "alice" } }
-{ "object": "home", "action": "provision", "args": { "name": "alice", "home_base": "/home/samba", "home_drive": "H:", "share_name": "home" } }
+{ "object": "home", "action": "provision", "args": { "name": "alice", "home_drive": "H:", "share_name": "home" } }
 { "object": "home", "action": "absent", "args": { "name": "alice" }, "preview": true }
 ```
 
@@ -310,13 +327,13 @@ entries or changes their level; `revoke` removes them (destructive — preview f
 
 ### samba_dc_backup — backup and restore
 
-Backup args: `targetdir` (required), `domain` (bool, default true), `domain_type` (`online`|`offline`, default `offline`), `files` (bool, default true), `files_paths` (list, default `[/home]`).
+Backup args: `targetdir` (required), `domain` (bool, default true), `domain_type` (`online`|`offline`, default `offline`), `files` (bool, default true), `files_paths` (list, default `[/home, /srv/samba]`).
 
 Restore args: `restore_backup_file`, `restore_targetdir`, `restore_newservername`, `restore_confirm=true` (all required).
 
 ```json
 { "action": "backup", "args": { "targetdir": "/var/backups/samba" } }
-{ "action": "backup", "args": { "targetdir": "/var/backups/samba", "files_paths": ["/home", "/srv/shares"] } }
+{ "action": "backup", "args": { "targetdir": "/var/backups/samba", "files_paths": ["/home", "/srv/samba"] } }
 { "action": "restore", "args": { "restore_backup_file": "/var/backups/samba/samba-backup.tar.gz",
     "restore_targetdir": "/var/lib/samba", "restore_newservername": "dc1",
     "restore_confirm": true }, "preview": true }
@@ -359,7 +376,7 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 
 ### Pause Windows Update for 7 days (role default)
 ```json
-{ "t": ["wu-pause"], "l": "all", "preview": true }
+{ "t": ["wu-pause"], "l": "lab_win", "preview": true }
 ```
 
 ### Pause Windows Update for a specific number of days
@@ -374,13 +391,15 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 
 ### Set the max pause cap to 90 days
 ```json
-{ "t": ["wu-max_pause_days-90"], "l": "all", "preview": true }
+{ "t": ["wu-max_pause_days-90"], "l": "lab_win", "preview": true }
 ```
 
 ### Routine lab maintenance
 ```json
-{ "playbook": "maintenance", "inventory": "ario_info", "preview": true }
+{ "playbook": "maintenance", "inventory": "ario_info", "background": true }
 ```
+`run_playbook` has no `preview`: this call runs. Confirm with the user first.
+
 Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, wim-scan, sfc, optimize, then unlock and restart. A host that fails a check skips the ones after it and is reported failed, but is still unlocked and restarted. It does not run Windows Update: use `wu-run` (security) or `wu-run-full` through `run_tasks`.
 
 ### See what Windows Update offers, then install an optional feature update
@@ -400,7 +419,7 @@ Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, 
 ```json
 { "object": "home", "action": "provision", "args": { "name": "alice" } }
 ```
-Creates `/home/samba/alice`, sets `homeDrive: H:` and `homeDirectory: \\DC\home\alice` in LDAP, and ensures the SMB share `home` exists.
+Creates `/srv/samba/home/alice`, sets `homeDrive: H:` and `homeDirectory: \\DC\home\alice` in LDAP, and ensures the SMB share `home` exists.
 
 ### Removing a user's home directory (with confirmation)
 ```json
