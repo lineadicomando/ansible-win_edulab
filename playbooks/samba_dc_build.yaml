@@ -1,6 +1,6 @@
 ---
 - name: Build Samba AD DC
-  hosts: "{{ target_hosts | default('dc01') }}"
+  hosts: "{{ target_hosts | default('samba_dc') }}"
   become: true
   gather_facts: true
   roles:

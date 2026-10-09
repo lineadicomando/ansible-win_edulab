@@ -385,9 +385,12 @@ all:
       children:      # and holder of the SSH/PowerShell connection settings
         lab_cad:
         lab_coding:
+    samba_dc:        # the domain controller: default target of the Samba
+      hosts:         # playbooks and MCP tools, which match nothing without it
+        dc01:
 ```
 
-Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `lab_win` is built from the labs. An inventory that holds a single lab can build `lab_win` from `teachers` and `students` instead.
+Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `lab_win` is built from the labs. `samba_dc` names the domain controller again: the `lineadicomando.samba_dc` collection requires that group, so its commands never reach another host. An inventory that holds a single lab can build `lab_win` from `teachers` and `students` instead.
 
 Also, edit `inventories/school/group_vars/all/vars.yaml` to define the SSH key path and collection-level settings.
 
