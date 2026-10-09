@@ -11,4 +11,4 @@
         dns_servers: "{{ samba_win_join_dns_servers }}"
       when: samba_win_join_dns_servers | default([]) | length > 0
   roles:
-    - role: lineadicomando.samba_ad_dc.samba_win_join
+    - role: lineadicomando.samba_dc.samba_win_join

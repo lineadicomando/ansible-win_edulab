@@ -8,7 +8,7 @@ all:
   children:
     servers:
       hosts:
-        samba_ad_dc:
+        dc01:
           ansible_host: 192.168.122.2
           ansible_mac: 52:54:00:38:64:a0
     # Role groups: the teacher PC runs the Veyon Master, the students are its agents
@@ -51,9 +51,9 @@ all:
       children:
         lab_cad:
         lab_coding:
-    # samba_dc is a convention required by the lineadicomando.samba_ad_dc collection.
+    # samba_dc is a convention required by the lineadicomando.samba_dc collection.
     # The samba.yaml and samba_dc_backup.yaml playbooks default to this group so that
     # AD management commands are never accidentally broadcast to non-DC hosts.
     samba_dc:
       hosts:
-        samba_ad_dc:
+        dc01:

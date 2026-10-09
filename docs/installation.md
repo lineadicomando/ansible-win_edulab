@@ -361,7 +361,7 @@ all:
   children:
     servers:
       hosts:
-        samba_ad_dc:
+        dc01:
           ansible_host: <DC-IP>
           ansible_mac: <DC-MAC>
     teachers:

@@ -25,7 +25,7 @@
   tasks:
     - name: Ensure test users
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: user
         samba_tool_action: present
@@ -38,7 +38,7 @@
 
     - name: Ensure test groups
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: group
         samba_tool_action: create
@@ -51,7 +51,7 @@
 
     - name: Ensure test group members
       ansible.builtin.include_role:
-        name: lineadicomando.samba_ad_dc.samba_tool
+        name: lineadicomando.samba_dc.samba_tool
       vars:
         samba_tool_object: group
         samba_tool_action: addmembers

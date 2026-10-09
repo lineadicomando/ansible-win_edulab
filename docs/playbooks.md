@@ -4,7 +4,7 @@ Playbooks that target a specific group accept the `-e target_hosts=<group|host>`
 
 | Playbook | Default target |
 |---|---|
-| `samba_dc_build.yaml` | `samba_ad_dc` |
+| `samba_dc_build.yaml` | `dc01` |
 | `samba_dc_join.yaml` | `lab_win` |
 | `win_wm.yaml` | `all` — always pass `-l` |
 | `lab_cad.yaml` | `lab_cad` |

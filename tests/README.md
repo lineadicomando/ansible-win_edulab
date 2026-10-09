@@ -42,7 +42,7 @@ evaluation licence the Windows images are used under.
 | `teacher`      | `win11-pc00`           | Windows 11  | `baseline`        |
 | `student01`    | `win11-pc01`           | Windows 11  | `baseline`        |
 | `student02`    | `win11-pc02`           | Windows 11  | `baseline`        |
-| `samba_ad_dc`  | `deb13-samba-dc`       | Debian 13   | `baseline`        |
+| `dc01`         | `deb13-samba-dc`       | Debian 13   | `baseline`        |
 
 The inventory groups `lab_win`, `lab_cad`, and `lab_coding` all expand to the three
 Windows hosts (`teacher`, `student01`, `student02`).

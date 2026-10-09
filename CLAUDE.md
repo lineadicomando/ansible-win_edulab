@@ -6,7 +6,7 @@ Agent instructions and directives for this project.
 
 ### 1. Use MCP services as the primary interface
 
-**Rule**: Always prefer the configured MCP services (win-workman, samba-ad-dc, win-edulab) over direct Ansible shell command execution.
+**Rule**: Always prefer the configured MCP services (win-workman, samba-dc, win-edulab) over direct Ansible shell command execution.
 
 **Why**: MCP services provide a structured and semantic interface that makes operations more traceable, documented, and easier to debug.
 

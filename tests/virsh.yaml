@@ -8,7 +8,7 @@
     snapshot: ~
     cmd: ~
     vm_map:
-      samba_ad_dc: "deb13-samba-dc"
+      dc01: "deb13-samba-dc"
       teacher: "win11-pc00"
       student01: "win11-pc01"
       student02: "win11-pc02"

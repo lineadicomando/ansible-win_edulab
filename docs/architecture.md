@@ -16,7 +16,7 @@ The automation is based on Ansible and two dedicated collections:
 ansible-win_edulab                       ← this project (inventory + playbooks + MCP server)
     requires ↓
     lineadicomando.win_workman           ← Windows software & system management (+ MCP server)
-    lineadicomando.samba_ad_dc           ← Samba 4 AD DC provisioning on Debian (+ MCP server)
+    lineadicomando.samba_dc           ← Samba 4 AD DC provisioning on Debian (+ MCP server)
 ```
 
 ## Project Structure

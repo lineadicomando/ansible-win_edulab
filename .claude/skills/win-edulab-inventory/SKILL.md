@@ -56,7 +56,7 @@ inventories/<lab>/
 ```yaml
 all:
   children:
-    servers:          # Linux servers (samba-ad-dc)
+    servers:          # Linux servers (dc01)
     teachers:         # teacher PC(s)
     students:         # student PCs
     lab_cad:          # vertical: the PCs of the CAD lab, listed directly

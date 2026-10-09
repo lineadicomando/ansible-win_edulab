@@ -25,7 +25,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 | `run_tasks` | Install/remove software, run operations on hosts/groups via the `lineadicomando.win_workman.win_workman` FQCN playbook |
 | `run_status`, `wait_run` | Same as on the win-edulab server, for runs started by `run_tasks` |
 
-### samba-ad-dc server
+### samba-dc server
 
 | Tool | When to use |
 |------|-------------|
@@ -129,7 +129,7 @@ Other `$Ansible` members: `Changed`, `Failed`, `Tmpdir`, `Diff`.
 - `error_action` defaults to `stop`: an error record fails the task instead of
   passing unnoticed.
 - `l` is **required** and has no default. More than 3 hosts needs `confirm=true`.
-- Windows hosts only; the Linux DC is the samba-ad-dc server's job.
+- Windows hosts only; the Linux DC is the samba-dc server's job.
 
 ### Examples
 
@@ -202,7 +202,7 @@ when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather tha
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
 | `maintenance` | `lab_win` | yes | System maintenance: wol (skipped on hosts with no `ansible_mac`) → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
 | `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
-| `samba_dc_build` | `samba_ad_dc` | yes | Build a new Samba AD Domain Controller |
+| `samba_dc_build` | `dc01` | yes | Build a new Samba AD Domain Controller |
 | `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
 | `shutdown` | `lab_win` | yes | Shut the lab down |
 
@@ -224,8 +224,8 @@ Discovered via `get_inventory`; groups common to most inventories:
 - `teachers` — teacher PC(s)
 - `students` — student PCs
 - `lab_win` — all Windows PCs (built from the lab groups, or from teachers + students); carries the connection settings
-- `servers` — Linux servers (samba-ad-dc etc.)
-- `samba_dc` — domain controller(s); **required by the samba_ad_dc collection** — all inventories that use the samba tools must define this group
+- `servers` — Linux servers (dc01 etc.)
+- `samba_dc` — domain controller(s); **required by the samba_dc collection** — all inventories that use the samba tools must define this group
 
 ---
 
@@ -257,7 +257,7 @@ The `samba` and `samba_dc_backup` tools target `samba_dc` by default. Explicit `
 
 #### home — user directory provisioning
 
-Replicates the cockpit-samba-ad-dc logic: creates the physical directory, sets the LDAP attributes `homeDrive`/`homeDirectory` via `ldbmodify`, and ensures the SMB share exists.
+Replicates the cockpit-samba-dc logic: creates the physical directory, sets the LDAP attributes `homeDrive`/`homeDirectory` via `ldbmodify`, and ensures the SMB share exists.
 
 | Argument | Default | Notes |
 |----------|---------|-------|
@@ -281,7 +281,7 @@ Examples:
 
 #### share — shared folders
 
-The same shares as the **Shared folders** tab of cockpit-samba-ad-dc: whatever
+The same shares as the **Shared folders** tab of cockpit-samba-dc: whatever
 is created here shows up in Cockpit and vice versa. Folder
 `/srv/samba/shares/<name>`, access enforced by the share (`valid users`/`read list`)
 and by a POSIX ACL, optional drive mapping at logon through the
