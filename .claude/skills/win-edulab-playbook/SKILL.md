@@ -56,19 +56,19 @@ Via MCP use `run_tasks` instead of calling the playbook directly — see the **w
 | File | Default target | Purpose |
 |------|---------------|---------|
 | `playbooks/win_wm.yaml` | passed via `-l` | Software dispatcher (all win_workman tasks) |
-| `playbooks/veyon.yaml` | `lab_win` | Full Veyon setup (keypair + config + network objects) |
+| `playbooks/veyon.yaml` | `win_managed` | Full Veyon setup (keypair + config + network objects) |
 | `playbooks/seb_classroom.yaml` | `students` | SEB configuration for Google Classroom |
-| `playbooks/gcpw.yaml` | `lab_win` | Google Credential Provider for Windows |
-| `playbooks/maintenance.yaml` | `lab_win` | Routine maintenance cycle: disk, component store and system file checks (no Windows Update) |
-| `playbooks/autologon.yaml` | `lab_win` | Hardcoded autologon with restart |
-| `playbooks/wol.yaml` | `lab_win` | Wake-on-LAN broadcast |
-| `playbooks/shutdown.yaml` | `lab_win` | Shut the lab down |
+| `playbooks/gcpw.yaml` | `win_managed` | Google Credential Provider for Windows |
+| `playbooks/maintenance.yaml` | `win_managed` | Routine maintenance cycle: disk, component store and system file checks (no Windows Update) |
+| `playbooks/autologon.yaml` | `win_managed` | Hardcoded autologon with restart |
+| `playbooks/wol.yaml` | `win_managed` | Wake-on-LAN broadcast |
+| `playbooks/shutdown.yaml` | `win_managed` | Shut the lab down |
 | `playbooks/lab_cad.yaml` | `lab_cad` | CAD lab setup |
 | `playbooks/lab_coding.yaml` | `lab_coding` | Coding lab setup |
 | `playbooks/samba_dc_build.yaml` | `samba_dc` | Build a Samba AD Domain Controller |
-| `playbooks/samba_dc_join.yaml` | `lab_win` | Join Windows hosts to the Samba AD domain |
+| `playbooks/samba_dc_join.yaml` | `win_managed` | Join Windows hosts to the Samba AD domain |
 
-> **Note on autologon**: prefer `run_tasks(["autologon"])` with `e` vars for full control. `autologon.yaml` is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `lab_win`.
+> **Note on autologon**: prefer `run_tasks(["autologon"])` with `e` vars for full control. `autologon.yaml` is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `win_managed`.
 
 ---
 

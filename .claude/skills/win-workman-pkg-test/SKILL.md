@@ -205,7 +205,7 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
 ## Testing a per-user (`usr`) role
 
 `tests/usr_zed.yaml` is the template: it imports `tests/samba_dc.yaml` (baseline revert of DC
-and `lab_win`, DC build, test users from `tests/samba_dc_users.yaml`, domain join), then on one
+and `win_managed`, DC build, test users from `tests/samba_dc_users.yaml`, domain join), then on one
 host asserts every step: policy targets/kinds → autologon of `SCHOOL\student-alice` with
 restart → agent log `end exit=0` → `usr-info` → `usr-off` + `usr-apply` → `usr-purge` +
 `autologon-off` → nothing left on disk. Copy it and change the schema name.

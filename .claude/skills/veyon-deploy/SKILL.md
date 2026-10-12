@@ -29,7 +29,7 @@ the **veyon-reference** skill.
 never reads it**. Master vs agent is decided by `win_workman_veyon_master` only.
 
 The project playbook is `playbooks/veyon.yaml` — `veyon` + `veyon-config` against
-`lab_win`, overridable with `-e target_hosts=<group>`.
+`win_managed`, overridable with `-e target_hosts=<group>`.
 
 ```json
 { "playbook": "veyon", "inventory": "ario_info", "e": { "target_hosts": "teacher" } }
@@ -55,7 +55,7 @@ Set per group, not per host:
 # group_vars/teachers/vars.yaml
 win_workman_veyon_master: true
 win_workman_veyon_labs:
-  - lab_win
+  - win_managed
 
 # group_vars/students/vars.yaml
 win_workman_veyon_master: false

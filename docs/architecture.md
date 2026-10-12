@@ -43,7 +43,7 @@ The organization of files and folders within the project is as follows:
 │       │   │   └── vault.yaml.example  # Template for vault.yaml
 │       │   ├── teachers/vars.yaml      # Veyon master flag and lab groups
 │       │   ├── students/vars.yaml      # Veyon client flag
-│       │   └── lab_win/vars.yaml       # SSH/PowerShell connection settings
+│       │   └── win_managed/vars.yaml       # SSH/PowerShell connection settings
 │       └── host_vars/
 ├── playbooks/                          # Shared, reusable playbooks (see above)
 ├── local/                              # Site-specific and one-off playbooks (gitignored)

@@ -43,7 +43,7 @@ inventories/<lab>/
 │   │   └── vars.yaml                   # variables specific to teacher PCs
 │   ├── students/
 │   │   └── vars.yaml                   # variables specific to student PCs
-│   └── lab_win/
+│   └── win_managed/
 │       └── vars.yaml                   # SSH/PowerShell connection settings for the Windows PCs
 └── host_vars/
     └── <HOSTNAME>.yaml                 # per-host overrides (e.g. DOC.yaml)
@@ -61,7 +61,7 @@ all:
     students:         # student PCs
     lab_cad:          # vertical: the PCs of the CAD lab, listed directly
     lab_coding:       # vertical: the PCs of the coding lab, listed directly
-    lab_win:          # transversal: every Windows PC, built from other groups
+    win_managed:      # transversal: every managed Windows PC, built from other groups
     samba_dc:         # the DC again (dc01): required by lineadicomando.samba_dc
 ```
 
@@ -71,14 +71,17 @@ Three kinds of group, each answering a different question:
   here, once, with `ansible_host` and `ansible_mac`.
 - **Vertical** (`lab_cad`, `lab_coding`) — which lab the PC sits in. They list hosts
   directly; real labs rarely share machines.
-- **Transversal** (`lab_win`) — every Windows PC whatever its lab. Built with `children`,
-  never by repeating hosts. It carries the connection settings and is the default target
-  of the lab-wide playbooks.
+- **Transversal** (`win_managed`) — every Windows PC that Ansible manages, wherever it
+  sits: a lab, a classroom, an office. Built with `children`, never by repeating hosts. It
+  carries the connection settings and is the default target of the playbooks and of
+  `run_tasks`. It was called `lab_win` until the project reached PCs outside the labs;
+  playbooks and MCP tools still fall back to that name in an inventory that lacks
+  `win_managed`.
 
-`school` builds `lab_win` from the labs:
+`school` builds `win_managed` from the labs:
 
 ```yaml
-lab_win:
+win_managed:
   children:
     lab_cad:
     lab_coding:
@@ -88,18 +91,19 @@ The site inventories hold one lab each, so they have no vertical groups and buil
 from the roles:
 
 ```yaml
-lab_win:
+win_managed:
   children:
     teachers:
     students:
 ```
 
-`spalla_aule` is the exception: no roles, and `lab_win` lists directly the PCs that are
-managed. There is no `windows11` group any more: its variables moved to
-`group_vars/lab_win`. Add a version group only where a play really needs one.
+`spalla_aule` holds classroom PCs, not a lab: no roles, and `win_managed` lists directly
+the PCs that are ready for Ansible. A PC left out of it has no connection settings and is
+treated as a POSIX host. There is no `windows11` group any more: its variables moved to
+`group_vars/win_managed`. Add a version group only where a play really needs one.
 
 Variables set on a child group win over those of its parents, so `teachers`/`students`
-(or the lab groups) override `lab_win` on a clash.
+(or the lab groups) override `win_managed` on a clash.
 
 ---
 
@@ -126,7 +130,7 @@ Sensitive values (passwords) are always **referenced from the vault** — never 
 ```yaml
 win_workman_veyon_master: true
 win_workman_veyon_labs:
-  - lab_win
+  - win_managed
 ```
 
 `group_vars/students/vars.yaml`:
@@ -139,7 +143,7 @@ win_workman_veyon_master: false
 ## Adding a new host
 
 1. Add it to `hosts.yaml` in the right group with `ansible_host` and `ansible_mac`
-2. In an inventory with vertical groups, name it in its lab group too. `lab_win` picks it up through `children`
+2. In an inventory with vertical groups, name it in its lab group too. `win_managed` picks it up through `children`
 3. If needed, create `host_vars/<HOSTNAME>.yaml` for host-specific overrides
 
 ```yaml

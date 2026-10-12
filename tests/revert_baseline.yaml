@@ -2,11 +2,11 @@
 - name: Revert to baseline
   ansible.builtin.import_playbook: virsh.yaml
   vars:
-    vm: "{{ t | default('lab_win') }}"
+    vm: "{{ t | default('win_managed') }}"
     cmd: snapshot-revert
     snapshot: baseline
 
 - name: Wake host
   ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
-    target_hosts: "{{ t | default('lab_win') }}"
+    target_hosts: "{{ t | default('win_managed') }}"

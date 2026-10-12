@@ -191,7 +191,8 @@ Not needed for standard roles without custom actions (e.g. `vlc`, `git`, `python
 when the role offers one, e.g. `zed-usr-on-student-alice+student-bob` rather than
 `extra_vars: {"win_workman_usr_targets": [...]}`.
 
-`l` defaults to `lab_win`, the Windows workstations; `all` also reaches the domain
+`l` defaults to `win_managed`, the managed Windows PCs (`lab_win` where an inventory still
+has only the old name); `all` also reaches the domain
 controller and has to be asked for explicitly.
 
 Secrets — a password, a licence code — never go in `extra_vars` or in the `e` of
@@ -212,16 +213,16 @@ The samba-dc tools do the same on their own for `args.password` and
 
 | Playbook | Default target | Accepts `target_hosts` | Use |
 |----------|---------------|------------------------|-----|
-| `veyon` | `lab_win` | yes | Full Veyon setup: keypair generation, config deploy, network objects |
+| `veyon` | `win_managed` | yes | Full Veyon setup: keypair generation, config deploy, network objects |
 | `seb_classroom` | `students` | yes | SEB configuration for an entire classroom |
-| `wol` | `lab_win` | yes | Wake-on-LAN broadcast across the inventory |
+| `wol` | `win_managed` | yes | Wake-on-LAN broadcast across the inventory |
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
-| `maintenance` | `lab_win` | yes | System maintenance: wol (skipped on hosts with no `ansible_mac`) → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
-| `samba_dc_join` | `lab_win` | yes | Join Windows hosts to the Samba AD domain |
+| `maintenance` | `win_managed` | yes | System maintenance: wol (skipped on hosts with no `ansible_mac`) → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
+| `samba_dc_join` | `win_managed` | yes | Join Windows hosts to the Samba AD domain |
 | `samba_dc_build` | `samba_dc` | yes | Build a new Samba AD Domain Controller |
-| `gcpw` | `lab_win` | yes | Google Credential Provider for Windows |
-| `shutdown` | `lab_win` | yes | Shut the lab down |
+| `gcpw` | `win_managed` | yes | Google Credential Provider for Windows |
+| `shutdown` | `win_managed` | yes | Shut the lab down |
 
 Pass `target_hosts` via the `e` parameter to override the default group:
 
@@ -231,7 +232,7 @@ Pass `target_hosts` via the `e` parameter to override the default group:
 { "playbook": "wol", "e": { "target_hosts": "lab_cad" } }
 ```
 
-> **Note on autologon**: use `run_tasks(["autologon-on"])` to enable autologon with role defaults. The `autologon.yaml` standalone playbook is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `lab_win` — prefer `run_tasks` unless that exact behaviour is needed.
+> **Note on autologon**: use `run_tasks(["autologon-on"])` to enable autologon with role defaults. The `autologon.yaml` standalone playbook is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `win_managed` — prefer `run_tasks` unless that exact behaviour is needed.
 
 ---
 
@@ -240,7 +241,7 @@ Pass `target_hosts` via the `e` parameter to override the default group:
 Discovered via `get_inventory`; groups common to most inventories:
 - `teachers` — teacher PC(s)
 - `students` — student PCs
-- `lab_win` — all Windows PCs (built from the lab groups, or from teachers + students); carries the connection settings
+- `win_managed` — all managed Windows PCs, in labs or not (built from the lab groups, or from teachers + students); carries the connection settings
 - `servers` — Linux servers (dc01 etc.)
 - `samba_dc` — domain controller(s); **required by the samba_dc collection** — all inventories that use the samba tools must define this group
 
@@ -371,12 +372,12 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 
 ### Lock down a lab during maintenance
 ```json
-{ "t": ["lock-on"], "l": "lab_win", "preview": true }
+{ "t": ["lock-on"], "l": "win_managed", "preview": true }
 ```
 
 ### Pause Windows Update for 7 days (role default)
 ```json
-{ "t": ["wu-pause"], "l": "lab_win", "preview": true }
+{ "t": ["wu-pause"], "l": "win_managed", "preview": true }
 ```
 
 ### Pause Windows Update for a specific number of days
@@ -391,7 +392,7 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 
 ### Set the max pause cap to 90 days
 ```json
-{ "t": ["wu-max_pause_days-90"], "l": "lab_win", "preview": true }
+{ "t": ["wu-max_pause_days-90"], "l": "win_managed", "preview": true }
 ```
 
 ### Routine lab maintenance
@@ -404,8 +405,8 @@ Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, 
 
 ### See what Windows Update offers, then install an optional feature update
 ```json
-{ "t": ["wu-scan"], "l": "lab_win", "inventory": "ario_info" }
-{ "t": ["wu-run-optional-upgrades", "wu-run"], "l": "lab_win", "inventory": "ario_info", "preview": true }
+{ "t": ["wu-scan"], "l": "win_managed", "inventory": "ario_info" }
+{ "t": ["wu-run-optional-upgrades", "wu-run"], "l": "win_managed", "inventory": "ario_info", "preview": true }
 ```
 `wu-run-upgrades` finds nothing when the feature update is offered as optional (26H2 on 25H2 hosts): `wu-scan` lists it under "Optional", and `wu-run-optional-<category>` installs it. The `wu-run` after it brings the cumulative of the new release.
 

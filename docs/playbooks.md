@@ -5,16 +5,16 @@ Playbooks that target a specific group accept the `-e target_hosts=<group|host>`
 | Playbook | Default target |
 |---|---|
 | `samba_dc_build.yaml` | `samba_dc` |
-| `samba_dc_join.yaml` | `lab_win` |
+| `samba_dc_join.yaml` | `win_managed` |
 | `win_wm.yaml` | `all` — always pass `-l` |
 | `lab_cad.yaml` | `lab_cad` |
 | `lab_coding.yaml` | `lab_coding` |
-| `veyon.yaml` | `lab_win` |
-| `maintenance.yaml` | `lab_win` |
-| `autologon.yaml` | `lab_win` |
-| `wol.yaml` | `lab_win` |
-| `shutdown.yaml` | `lab_win` |
-| `gcpw.yaml` | `lab_win` |
+| `veyon.yaml` | `win_managed` |
+| `maintenance.yaml` | `win_managed` |
+| `autologon.yaml` | `win_managed` |
+| `wol.yaml` | `win_managed` |
+| `shutdown.yaml` | `win_managed` |
+| `gcpw.yaml` | `win_managed` |
 | `seb_classroom.yaml` | `students` |
 
 ---
@@ -48,13 +48,13 @@ will also try to run Windows tasks against the domain controller.
 
 ```bash
 # Install Chrome and Python 3.14
-ansible-playbook playbooks/win_wm.yaml -l lab_win -e "t=chrome,python314"
+ansible-playbook playbooks/win_wm.yaml -l win_managed -e "t=chrome,python314"
 
 # Uninstall Firefox
-ansible-playbook playbooks/win_wm.yaml -l lab_win -e "t=firefox-off"
+ansible-playbook playbooks/win_wm.yaml -l win_managed -e "t=firefox-off"
 
 # Windows Update, then restart
-ansible-playbook playbooks/win_wm.yaml -l lab_win -e "t=wu-run,restart"
+ansible-playbook playbooks/win_wm.yaml -l win_managed -e "t=wu-run,restart"
 
 # Target a single host
 ansible-playbook playbooks/win_wm.yaml -l teacher -e "t=chrome"

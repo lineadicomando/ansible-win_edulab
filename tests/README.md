@@ -11,7 +11,7 @@ created by `samba_dc_users.yaml` are part of the test environment and stay here.
 tests/
   virsh.yaml           # Utility: VM management via virsh (revert, start, shutdown, ...)
   revert_baseline.yaml # Utility: revert to baseline + wake for arbitrary target (var t)
-  samba_dc.yaml        # Samba AD DC build, test users, domain join of lab_win, shared folders
+  samba_dc.yaml        # Samba AD DC build, test users, domain join of win_managed, shared folders
   samba_dc_users.yaml  # Domain test users and groups (imported by samba_dc.yaml)
   usr_zed.yaml         # Per-user deferred install (usr action) with domain users, on zed
   samba_share.yaml     # Shared folders: SMB access per user, drive mapping at logon, revoke, delete (imported by samba_dc.yaml)
@@ -44,7 +44,7 @@ evaluation licence the Windows images are used under.
 | `student02`    | `win11-pc02`           | Windows 11  | `baseline`        |
 | `dc01`         | `deb13-samba-dc`       | Debian 13   | `baseline`        |
 
-The inventory groups `lab_win`, `lab_cad`, and `lab_coding` all expand to the three
+The inventory groups `win_managed`, `lab_cad`, and `lab_coding` all expand to the three
 Windows hosts (`teacher`, `student01`, `student02`).
 
 The `baseline` snapshot is a clean Windows 11 installation with WinRM/SSH configured
@@ -99,7 +99,7 @@ ansible-playbook tests/<test-playbook>.yaml
 `revert_baseline.yaml` can be used to prepare a VM without running a test:
 
 ```bash
-# default target: lab_win
+# default target: win_managed
 ansible-playbook tests/revert_baseline.yaml
 
 # specific target via variable t
@@ -122,12 +122,12 @@ Runs the structural playbook `playbooks/lab_coding.yaml` against the test VM.
 
 ### `seb_classroom.yaml` — SEB Classroom
 
-**Target:** `lab_win` | **Snapshot:** `baseline`
+**Target:** `win_managed` | **Snapshot:** `baseline`
 
 Runs the structural playbook `playbooks/seb_classroom.yaml` against the test VM.
 
 ### `veyon.yaml` — Veyon
 
-**Target:** `lab_win` | **Snapshot:** `baseline`
+**Target:** `win_managed` | **Snapshot:** `baseline`
 
 Runs the structural playbook `playbooks/veyon.yaml` against the test VM.

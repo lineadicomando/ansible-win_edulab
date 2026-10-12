@@ -6,7 +6,7 @@
 # with no ansible_mac in the inventory skips it: a lab of laptops on Wi-Fi
 # cannot be woken, and is maintained as it is found, already switched on.
 - name: Routine maintenance — disk, component store and system file checks
-  hosts: "{{ target_hosts | default('lab_win') }}"
+  hosts: "{{ target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win') }}"
   gather_facts: false
   tasks:
     - name: Wake the workstations

@@ -1,6 +1,6 @@
 ---
 - name: Google Credential Provider for Windows (GCPW)
-  hosts: "{{ target_hosts | default('lab_win') }}" # override: -e target_hosts=<group>
+  hosts: "{{ target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win') }}" # override: -e target_hosts=<group>
   gather_facts: false
   roles:
     - role: lineadicomando.win_workman.dispatcher
