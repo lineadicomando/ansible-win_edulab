@@ -168,7 +168,7 @@ tracked by git; site-specific inventories next to it are gitignored.
     "students":  ["student01", "student02"],
     "lab_cad":   ["teacher", "student01", "student02"],
     "lab_coding": ["teacher", "student01", "student02"],
-    "lab_win":   ["teacher", "student01", "student02"],
+    "win_managed":   ["teacher", "student01", "student02"],
     "samba_dc":  ["dc01"]
   }
 }
@@ -184,7 +184,7 @@ the collection playbook `lineadicomando.win_workman.win_workman`.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `t` | string[] | yes | — | Task list, e.g. `["chrome"]` or `["chkdsk", "sfc"]` |
-| `l` | string | no | `lab_win` | Ansible limit: hostname or group name |
+| `l` | string | no | `win_managed` | Ansible limit: hostname or group name |
 | `inventory` | string | no | `school` | Inventory name under `inventories/` |
 | `extra_vars` | object | no | — | Role variables passed as Ansible extra vars; `t` and `ansible_*` are refused |
 | `sensitive_vars` | object | no | — | Role variables that are secrets: merged with `extra_vars`, kept off the command line and masked in the log (see [Secrets](#secrets)) |
@@ -193,7 +193,8 @@ the collection playbook `lineadicomando.win_workman.win_workman`.
 | `background` | boolean | no | `false` | Return a run id instead of waiting; follow with `wait_run` or `run_status` |
 
 The playbook runs on `hosts: all` and the tool narrows it with `-l`. The default,
-`lab_win`, is the group of the Windows workstations; `all` would also reach the domain
+`win_managed`, is the group of the managed Windows PCs (`lab_win` in an inventory that
+still has only the old name); `all` would also reach the domain
 controller and has to be asked for explicitly.
 
 #### Task format

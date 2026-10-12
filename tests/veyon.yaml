@@ -2,16 +2,16 @@
 - name: Revert to baseline
   ansible.builtin.import_playbook: virsh.yaml
   vars:
-    vm: lab_win
+    vm: win_managed
     cmd: snapshot-revert
     snapshot: baseline
 
 - name: Wake host
   ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
-    target_hosts: lab_win
+    target_hosts: win_managed
 
 - name: Deploy Veyon
   ansible.builtin.import_playbook: ../playbooks/veyon.yaml
   vars:
-    target_hosts: lab_win
+    target_hosts: win_managed

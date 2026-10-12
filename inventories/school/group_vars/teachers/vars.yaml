@@ -1,4 +1,4 @@
 ---
 win_workman_veyon_master: true
 win_workman_veyon_labs:
-  - lab_win
+  - win_managed

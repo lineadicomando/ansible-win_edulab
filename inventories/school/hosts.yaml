@@ -39,15 +39,15 @@ all:
         teacher:
         student01:
         student02:
-    # Transversal group: every Windows PC, whatever lab it sits in, built from the
-    # labs. It carries the connection settings (group_vars/lab_win) and is the default
-    # target of the lab-wide playbooks: wol, shutdown, veyon, maintenance.
+    # Transversal group: every managed Windows PC, whatever lab it sits in, built
+    # from the labs. It carries the connection settings (group_vars/win_managed) and is
+    # the default target of the playbooks: wol, shutdown, veyon, maintenance.
     # An inventory holding a single lab can build it from the role groups instead:
-    #   lab_win:
+    #   win_managed:
     #     children:
     #       teachers:
     #       students:
-    lab_win:
+    win_managed:
       children:
         lab_cad:
         lab_coding:

@@ -4,14 +4,14 @@
   vars:
     vm:
       - dc01
-      - lab_win
+      - win_managed
     cmd: snapshot-revert
     snapshot: baseline
 
 - name: Wake hosts
   ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
-    target_hosts: dc01:lab_win
+    target_hosts: dc01:win_managed
 
 - name: Build Samba AD DC
   ansible.builtin.import_playbook: ../playbooks/samba_dc_build.yaml

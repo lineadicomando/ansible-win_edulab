@@ -381,7 +381,7 @@ all:
       hosts: { teacher:, student01:, student02: }
     lab_coding:
       hosts: { teacher:, student01:, student02: }
-    lab_win:         # every Windows PC: default target for many playbooks,
+    win_managed:     # every managed Windows PC: default target for many playbooks,
       children:      # and holder of the SSH/PowerShell connection settings
         lab_cad:
         lab_coding:
@@ -390,7 +390,7 @@ all:
         dc01:
 ```
 
-Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `lab_win` is built from the labs. `samba_dc` names the domain controller again: the `lineadicomando.samba_dc` collection requires that group, so its commands never reach another host. An inventory that holds a single lab can build `lab_win` from `teachers` and `students` instead.
+Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `win_managed` is built from the labs. `samba_dc` names the domain controller again: the `lineadicomando.samba_dc` collection requires that group, so its commands never reach another host. An inventory that holds a single lab can build `win_managed` from `teachers` and `students` instead. The group was called `lab_win` in earlier versions: playbooks and MCP tools still fall back to that name when an inventory has no `win_managed`.
 
 Also, edit `inventories/school/group_vars/all/vars.yaml` to define the SSH key path and collection-level settings.
 
