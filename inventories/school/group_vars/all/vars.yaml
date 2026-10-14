@@ -65,6 +65,8 @@ samba_win_join_dns_servers:
 win_workman_browser_shortcut_url: https://lineadicomando.it
 win_workman_brave_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
 win_workman_chrome_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
+win_workman_chrome_extension_allowlist:
+  - ghbmnnjooekpmoecnnnilnnbdlolhkhi  # Google Docs Offline: context-menu copy/paste in Docs and Sheets
 win_workman_edge_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
 win_workman_firefox_shortcut_url: "{{ win_workman_browser_shortcut_url }}"
 
