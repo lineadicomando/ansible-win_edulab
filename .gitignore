@@ -1,5 +1,6 @@
 .claude/settings.local.json
-CLAUDE.local.md
+# Workstation notes: CLAUDE.local.md, TODO.local.md
+*.local.md
 .mcp.json
 *.pyc
 __pycache__/
