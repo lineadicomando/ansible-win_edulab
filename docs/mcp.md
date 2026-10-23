@@ -5,9 +5,8 @@ this project to Claude Code. It lets you manage lab workstations in natural lang
 "install Chrome on teacher", "run chkdsk on all students", and so on.
 
 It works alongside two servers shipped with the collections: **win-workman**
-(`run_tasks`, `get_role_info`) and **samba-dc** (`samba`, `samba_dc_backup`,
-`samba_win_status`). Their tools are documented here too, since the three are
-used together.
+(`run_tasks`, `get_role_info`) and **samba-dc** (`samba`, `samba_dc_backup`). Their
+tools are documented here too, since the three are used together.
 
 ## Architecture
 
@@ -106,7 +105,8 @@ cp .mcp.json.example .mcp.json
       "command": "python3",
       "args": ["/path/to/ansible-collection-samba_dc/mcp/server.py"],
       "env": {
-        "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab"
+        "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab",
+        "ANSIBLE_MCP_DEFAULT_INVENTORY": "school"
       }
     },
     "win-edulab": {
@@ -121,6 +121,8 @@ The collection servers can point at a separate checkout of each collection or at
 the copy installed by `ansible-galaxy`, e.g.
 `ansible_collections/lineadicomando/win_workman/mcp/server.py`. They find the
 inventories through `ANSIBLE_PROJECT_ROOT`, which must point at this project.
+samba-dc has no default inventory of its own: `ANSIBLE_MCP_DEFAULT_INVENTORY`
+gives it `school`, as win-workman has.
 
 `args` can use paths relative to the project root. Claude Code sets the working
 directory to the project root before launching the server.
@@ -421,11 +423,12 @@ Response:
 
 ---
 
-### `samba_win_status`
+### Domain membership of the Windows PCs
 
-*Server: samba-dc.* Reports whether each Windows host is joined to an AD domain or
-a workgroup, and which one, through the `lineadicomando.samba_dc.samba_win_status`
-playbook. Read-only. Accepts `l`, `inventory` and `preview`.
+*Server: win-workman.* `run_tasks` with `t: "domain"` reports whether each host is
+joined to an AD domain or a workgroup, and which one (the `domain` role of
+win_workman, read-only); `domain-join` and `domain-leave` change it. Joining the
+managed PCs with this project's variables is the `samba_dc_join` playbook.
 
 ---
 

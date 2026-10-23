@@ -1,14 +1,13 @@
 ---
-- name: Join AD DC Test
-  hosts: "{{ target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win') }}"
+# Joins the managed Windows PCs to the Samba AD domain through the domain role
+# of lineadicomando.win_workman, which first points their DNS at the DC (the
+# domain SRV records are only served there). Variables: win_workman_domain_*
+# in group_vars/all.
+- name: Join Windows hosts to the Samba AD domain
+  hosts: "{{ target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win') }}"  # override: -e target_hosts=<group>
   gather_facts: false
-  # The join locates the domain through its SRV records, which only the DC
-  # serves: point the clients at it first when the inventory says so.
-  pre_tasks:
-    - name: Use the domain controller as DNS server
-      ansible.windows.win_dns_client:
-        adapter_names: "*"
-        dns_servers: "{{ samba_win_join_dns_servers }}"
-      when: samba_win_join_dns_servers | default([]) | length > 0
   roles:
-    - role: lineadicomando.samba_dc.samba_win_join
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "domain-join"
