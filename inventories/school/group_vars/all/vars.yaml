@@ -41,7 +41,7 @@ samba_dc_build_search_domain: school.internal
 # Upstream resolver, not the DC itself: apt needs it before Samba answers DNS,
 # and samba-tool provision takes it from resolv.conf as the dns forwarder.
 samba_dc_build_nameserver: 192.168.122.1
-samba_dc_build_address: 192.168.122.2
+samba_dc_build_address: "{{ hostvars['dc01'].ansible_host }}"
 samba_dc_build_netmask: 255.255.255.0
 samba_dc_build_gateway: 192.168.122.1
 samba_dc_build_ifname: enp1s0

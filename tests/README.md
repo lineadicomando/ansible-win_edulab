@@ -10,6 +10,9 @@ created by `samba_dc_users.yaml` are part of the test environment and stay here.
 ```
 tests/
   virsh.yaml           # Utility: VM management via virsh (revert, start, shutdown, ...)
+  vm_build_windows.yaml # Utility: build a Windows test VM from scratch, unattended, up to its baseline
+  vm_build_dc.yaml     # Utility: build the Debian VM of the DC from scratch, preseeded, up to its baseline
+  vm_build/            # Answer file, first-logon script and preseed templates of the two above
   revert_baseline.yaml # Utility: revert to baseline + wake for arbitrary target (var t)
   samba_dc.yaml        # Samba AD DC build, test users, domain join of win_managed, shared folders
   samba_dc_users.yaml  # Domain test users and groups (imported by samba_dc.yaml)
@@ -35,23 +38,24 @@ packages required are listed in
 ISO download links, `virt-install` options, the `baseline` snapshot, and the
 evaluation licence the Windows images are used under.
 
-`virsh.yaml` resolves inventory targets to KVM VM names via its internal `vm_map`.
+Each test VM is a host of `inventories/school` that names its libvirt domain in
+`libvirt_domain`; `virsh.yaml` and the build playbooks read it from there.
 
-| Inventory host | KVM VM name            | OS          | Required snapshot |
-|----------------|------------------------|-------------|-------------------|
-| `teacher`      | `win11-pc00`           | Windows 11  | `baseline`        |
-| `student01`    | `win11-pc01`           | Windows 11  | `baseline`        |
-| `student02`    | `win11-pc02`           | Windows 11  | `baseline`        |
-| `dc01`         | `deb13-samba-dc`       | Debian 13   | `baseline`        |
+| Inventory host | libvirt domain           | OS          | Built by               | Required snapshot |
+|----------------|--------------------------|-------------|------------------------|-------------------|
+| `teacher`      | `win_edulab-teacher`     | Windows 11  | `vm_build_windows.yaml` | `baseline`       |
+| `student01`    | `win_edulab-student01`   | Windows 11  | `vm_build_windows.yaml` | `baseline`       |
+| `dc01`         | `win_edulab-samba-dc`    | Debian 13   | `vm_build_dc.yaml`      | `baseline`       |
 
-The inventory groups `win_managed`, `lab_cad`, and `lab_coding` all expand to the three
-Windows hosts (`teacher`, `student01`, `student02`).
+The inventory groups `win_managed`, `lab_cad`, and `lab_coding` all expand to the two
+Windows hosts (`teacher`, `student01`).
 
-The `baseline` snapshot is a clean Windows 11 installation with WinRM/SSH configured
-and no additional software installed.
+The Windows `baseline` is a clean Windows 11 installation with the inventory account,
+OpenSSH Server and no additional software; the DC `baseline` is a plain Debian with SSH
+and sudo, before `samba_dc_build` runs.
 
-> **Note:** `virsh.yaml` uses `become: true` — the user running the playbook must have
-> sudo privileges on the local host.
+> **Note:** the user running `virsh.yaml` needs access to `qemu:///system` (the
+> `libvirt` group), not sudo.
 
 ## Domain test users
 

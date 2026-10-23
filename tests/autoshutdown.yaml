@@ -3,7 +3,7 @@
 # its own at fixed times.
 #
 #   ansible-playbook tests/autoshutdown.yaml
-#   ansible-playbook tests/autoshutdown.yaml -e test_hosts=teacher,student01,student02
+#   ansible-playbook tests/autoshutdown.yaml -e test_hosts=teacher,student01
 #
 # From the baseline snapshot, on every host:
 #   1. invalid settings are refused and leave no task behind: an unquoted time,

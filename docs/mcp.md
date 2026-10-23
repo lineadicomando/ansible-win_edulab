@@ -157,18 +157,17 @@ tracked by git; site-specific inventories next to it are gitignored.
 ```json
 {
   "hosts": {
-    "dc01":        { "ansible_host": "192.168.122.2",  "ansible_mac": "52:54:00:38:64:a0" },
-    "teacher":     { "ansible_host": "192.168.122.10", "ansible_mac": "52:54:00:1c:82:8e" },
-    "student01":   { "ansible_host": "192.168.122.11", "ansible_mac": "52:54:00:a6:db:78" },
-    "student02":   { "ansible_host": "192.168.122.12", "ansible_mac": "52:54:00:bf:d8:d6" }
+    "dc01":      { "ansible_host": "192.168.122.20", "ansible_mac": "52:54:00:ed:1a:20", "libvirt_domain": "win_edulab-samba-dc" },
+    "teacher":   { "ansible_host": "192.168.122.21", "ansible_mac": "52:54:00:ed:1a:21", "libvirt_domain": "win_edulab-teacher" },
+    "student01": { "ansible_host": "192.168.122.22", "ansible_mac": "52:54:00:ed:1a:22", "libvirt_domain": "win_edulab-student01" }
   },
   "groups": {
     "servers":   ["dc01"],
     "teachers":  ["teacher"],
-    "students":  ["student01", "student02"],
-    "lab_cad":   ["teacher", "student01", "student02"],
-    "lab_coding": ["teacher", "student01", "student02"],
-    "win_managed":   ["teacher", "student01", "student02"],
+    "students":  ["student01"],
+    "lab_cad":   ["teacher", "student01"],
+    "lab_coding": ["teacher", "student01"],
+    "win_managed":   ["teacher", "student01"],
     "samba_dc":  ["dc01"]
   }
 }

@@ -80,8 +80,10 @@ sudo apt install -y qemu-system-x86 libvirt-daemon-system libvirt-clients \
                     virtinst virt-manager ovmf swtpm swtpm-tools
 ```
 
-The VMs live on the system libvirt instance (`qemu:///system`), because
-`tests/virsh.yaml` runs `virsh` with `become: true`.
+The VMs live on the system libvirt instance (`qemu:///system`). The user running
+the playbooks needs access to it — membership of the `libvirt` group — but no sudo.
+The build playbooks also need `xorriso` (to pack the Windows answer file) and
+`openssl` (to hash the Debian password).
 
 ### Wake-on-LAN for libvirt domains
 
@@ -118,94 +120,110 @@ step waits 300 seconds on port 22 and fails unless the VM is started by hand.
 
 The test lab sits on the libvirt `default` NAT network, `192.168.122.0/24`,
 whose gateway `192.168.122.1` is also the DNS forwarder and NTP source declared
-in `inventories/school/group_vars/all/vars.yaml`.
+in `inventories/school/group_vars/all/`.
 
-Addresses are **static inside each guest**: the inventory pins them below the
-libvirt DHCP range (`.100`–`.200`), so nothing depends on a lease. The MAC
-addresses matter as well — the `wol` role sends its magic packet to
-`ansible_mac`, so the value in `hosts.yaml` must be the one on the VM NIC.
+Everything that describes a VM is in the inventory: address and MAC in
+`hosts.yaml`, together with `libvirt_domain`, the name of the VM; sizes, network,
+locale and timezone of the guests in `group_vars/all/test_vms.yaml`. The build
+playbooks and `tests/virsh.yaml` read them from there, so renaming a VM or moving
+it to another address means editing the inventory and rebuilding the VM.
 
-| Inventory host | VM name          | IP               | MAC                 |
-|----------------|------------------|------------------|---------------------|
-| `dc01`         | `deb13-samba-dc` | `192.168.122.2`  | `52:54:00:38:64:a0` |
-| `teacher`      | `win11-pc00`     | `192.168.122.10` | `52:54:00:1c:82:8e` |
-| `student01`    | `win11-pc01`     | `192.168.122.11` | `52:54:00:a6:db:78` |
-| `student02`    | `win11-pc02`     | `192.168.122.12` | `52:54:00:bf:d8:d6` |
+| Inventory host | libvirt domain          | IP               | MAC                 |
+|----------------|-------------------------|------------------|---------------------|
+| `dc01`         | `win_edulab-samba-dc`   | `192.168.122.20` | `52:54:00:ed:1a:20` |
+| `teacher`      | `win_edulab-teacher`    | `192.168.122.21` | `52:54:00:ed:1a:21` |
+| `student01`    | `win_edulab-student01`  | `192.168.122.22` | `52:54:00:ed:1a:22` |
 
-The VM names are the ones `tests/virsh.yaml` maps in its internal `vm_map`;
-choosing different names means editing that map, and different MACs or IPs mean
-editing `inventories/school/hosts.yaml`.
+Addresses are **static inside each guest**, below the libvirt DHCP range
+(`.100`–`.200`), so nothing depends on a lease. The MAC matters as well: the
+`wol` role sends its magic packet to `ansible_mac`, and `virsh_wakeonlan` starts
+the domain whose NIC carries it. Other projects may keep VMs on the same libvirt
+network: give each VM its own address and MAC, or the listener cannot tell them
+apart.
 
 ---
 
-## Creating a Windows test VM
+## Building the VMs
 
-```bash
-sudo virt-install \
-  --name win11-pc00 \
-  --osinfo win11 \
-  --memory 4096 --vcpus 2 --cpu host-passthrough \
-  --machine q35 --boot uefi,loader.secure=yes --features smm.state=on \
-  --tpm backend.type=emulator,backend.version=2.0,model=tpm-crb \
-  --disk size=128,format=qcow2,bus=sata \
-  --network network=default,mac=52:54:00:1c:82:8e,model=e1000e \
-  --cdrom /path/to/Win11_Enterprise_Eval.iso \
-  --graphics spice
+The ISOs are downloaded by you (links above) and their paths given to the
+playbooks as `test_vm_win11_iso` and `test_vm_debian_iso`, either with `-e` or in
+`local/test_vms.yaml`, an untracked file the playbooks load when present:
+
+```yaml
+---
+test_vm_win11_iso: /path/to/Win11_Enterprise_Eval.iso
+test_vm_debian_iso: /path/to/debian-13-amd64-netinst.iso
 ```
 
-- **Secure Boot and TPM 2.0** are hard requirements of the Windows 11 installer;
-  without them setup stops on a compatibility screen.
-- **SATA disk and e1000e NIC** are used so that Windows setup finds disk and
-  network with its in-box drivers, without a virtio driver ISO. Virtio is faster
-  but not worth the extra step for a test VM.
-- The 128 GiB disk is thin-provisioned: a clean baseline occupies around 20 GiB.
+Each playbook stops if the VM already exists; `-e rebuild=true` destroys it first,
+with its disk, NVRAM, TPM and snapshots. Both check that the host has the memory
+the VM needs before creating it. They need `virt-install`, `xorriso` and `openssl`
+on the control node, and Internet access for the guests.
 
-### Windows setup inside the VM
-
-1. At OOBE, the Enterprise evaluation still offers a local account: choose
-   **Sign-in options** → **Domain join instead** instead of signing in with a
-   Microsoft account.
-2. Set the static IP, netmask `255.255.255.0`, gateway and DNS `192.168.122.1`
-   as per the table above.
-3. Prepare the host for Ansible following
-   [Preparing the Managed Hosts](installation.md#preparing-the-managed-hosts-windows-11-pro):
-   the `maint` administrative account with the password stored in the vault,
-   OpenSSH Server, PowerShell as `DefaultShell`, firewall rule for port 22.
-4. Check the result from the control node:
-
-   ```bash
-   ansible teacher -m ansible.windows.win_ping
-   ```
-
-The other two workstations can be installed the same way, or cloned once the
-first one is ready:
+### Windows: `tests/vm_build_windows.yaml`
 
 ```bash
-sudo virt-clone --original win11-pc00 --name win11-pc01 \
-                --mac 52:54:00:a6:db:78 --auto-clone
+ansible-playbook tests/vm_build_windows.yaml -e vm=teacher      # 20-40 minutes
+ansible-playbook tests/vm_build_windows.yaml -e vm=student01
 ```
 
-After cloning, boot the clone and change its computer name and static IP —
-duplicated names are a nuisance once the machines join the domain.
+One VM at a time is the safe default: each takes 4 GiB of RAM. The playbook:
+
+1. renders an answer file (`tests/vm_build/autounattend.xml.j2`) and a first-logon
+   script (`setup.ps1.j2`) into a private directory under `/tmp`, packs them into a
+   small ISO and uploads it to the libvirt pool. The answer file holds the account
+   password, so it never touches the work tree and is deleted at the end;
+2. creates the VM with `virt-install`: UEFI with Secure Boot and Microsoft keys,
+   emulated TPM 2.0, SMM, SATA disk and e1000e NIC (in-box drivers, no virtio ISO),
+   QXL display and a USB tablet, the evaluation ISO and the answer ISO as CD-ROMs;
+3. presses Enter at the firmware's "boot from CD or DVD" prompt, for a few seconds
+   only: later in Setup the Cancel button has the focus;
+4. lets Setup run unattended: disk 0 wiped and partitioned (EFI, MSR, Windows),
+   image 1 installed, computer name from the inventory host, Italian locale and
+   keyboard, OOBE screens hidden, local administrator `ansible_user` with the
+   inventory password, one automatic logon;
+5. at that logon, `setup.ps1` installs OpenSSH Server, sets PowerShell as its
+   default shell, opens port 22, turns off sleep and hibernation, clears the
+   autologon password and moves the NIC to the static address. It logs to
+   `C:\Windows\Temp\edulab-setup.log`;
+6. waits for SSH at the inventory address, checks the script's outcome, reports
+   when the evaluation ends, shuts Windows down, ejects the media and takes the
+   `baseline` snapshot.
+
+### Domain controller: `tests/vm_build_dc.yaml`
+
+```bash
+ansible-playbook tests/vm_build_dc.yaml                          # about 10 minutes
+```
+
+A Debian 13 netinst driven by a preseed (`tests/vm_build/preseed.cfg.j2`): static
+address and host name from the inventory, `ansible_user` with sudo and the
+inventory password (hashed with `openssl passwd -6`), no root password, SSH server,
+`python3` and `qemu-guest-agent`. Virtio disk and NIC, so the interface is
+`enp1s0`, the default of `samba_dc_build_ifname`.
+
+After the installation the playbook prepares the two things `samba_dc_build`
+expects and the Debian installer does not leave behind:
+
+- the static configuration moves from `/etc/network/interfaces` to
+  `/etc/network/interfaces.d/<iface>`, with the exact content the role writes
+  there. Two stanzas for the same interface collide at the next `ifup`, which the
+  role triggers with its reboot handler;
+- `/etc/resolv.conf` names a nameserver, since the role's first `apt` task runs
+  before it rewrites the resolver.
+
+It then reboots once to prove the VM comes back with its address, shuts it down
+and takes the `baseline` snapshot. The domain is provisioned by
+`tests/samba_dc_build.yaml` or `tests/samba_dc.yaml`, which start from that
+snapshot.
 
 ---
 
 ## The `baseline` snapshot
 
-Every test playbook starts by reverting to a snapshot named `baseline`, so each
-test VM must have one. It represents a clean Windows installation with SSH
-working and no additional software:
-
-```bash
-sudo virsh shutdown win11-pc00
-# wait for the VM to be shut off, then:
-sudo virsh snapshot-create-as win11-pc00 baseline \
-     --description "clean Win11 Enterprise Eval + maint account + OpenSSH"
-```
-
-```bash
-sudo virsh snapshot-list win11-pc00     # check it exists
-```
+Every test playbook starts by reverting to a snapshot named `baseline`. The build
+playbooks take it with the VM shut off: a clean OS with the inventory account and
+SSH, no additional software.
 
 > **Why the snapshot is taken with the VM shut off.** `virsh snapshot-revert`
 > restores the state the snapshot was taken in, so a shut-off baseline leaves the
@@ -213,34 +231,57 @@ sudo virsh snapshot-list win11-pc00     # check it exists
 > step sends a Wake-on-LAN packet, and `virsh_wakeonlan` turns it into a
 > `virsh start`. The sequence is then the same one used against real
 > workstations. If you prefer not to run the listener, revert manually with
-> `sudo virsh snapshot-revert win11-pc00 baseline --running` or start the VM with
+> `virsh snapshot-revert <domain> baseline --running` or start the VM with
 > `ansible-playbook tests/virsh.yaml -e vm=teacher -e cmd=start`.
 
-Rebuild the snapshot whenever the baseline itself changes — a new Windows build,
-a different maintenance account — and in any case when the evaluation period
-expires and the VM is rebuilt from a fresh ISO.
+Rebuild the VM rather than patching its baseline whenever the baseline itself
+changes — a new Windows build, a different maintenance account — and in any case
+when the evaluation period expires.
 
 ---
 
-## The Debian DC VM
+## Manual fallback
 
-The Domain Controller VM is installed from the Debian netinst image with the
-usual defaults (SSH server, no desktop), the static address `192.168.122.2`, and
-the same `maint` account with sudo rights. From there,
-`playbooks/samba_dc_build.yaml` provisions the domain; the `samba_dc_build_*`
-variables are described in [Installation](installation.md#6-configure-samba-dc-parameters-optional).
+If an unattended build stops on a screen the answer file does not handle (a new
+OOBE page in a future Windows release, for instance), look at the VM display
+(`virt-viewer`, or `tools/vm/vmgui.py <host> shot`) and finish by hand:
 
-A `baseline` snapshot taken right after the OS install — before provisioning —
-makes `tests/samba_dc_build.yaml` repeatable.
+### Windows
 
-> **Two things to settle before that snapshot.** `samba_dc_build` assumes the
-> machine already resolves names: its first `apt` task runs before the role
-> rewrites `/etc/resolv.conf`, so an installer leftover with no `nameserver`
-> line fails the build immediately. And the static address must *not* be written
-> as an `iface` stanza in `/etc/network/interfaces`: the role writes its own into
-> `/etc/network/interfaces.d/`, and two stanzas for the same interface collide at
-> the next `ifup` — which the role triggers with its reboot handler. Put the
-> static configuration in `/etc/network/interfaces.d/<iface>` instead, with the
-> same content the role writes there, and leave the main file with its stanza
-> commented out: the VM then boots with its address both before and after the
-> role runs, and the role's own task reports no change.
+```bash
+virt-install \
+  --name win_edulab-teacher \
+  --osinfo win11 \
+  --memory 4096 --vcpus 2 --cpu host-passthrough \
+  --machine q35 --features smm.state=on \
+  --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes,firmware.feature1.name=enrolled-keys,firmware.feature1.enabled=yes \
+  --tpm backend.type=emulator,backend.version=2.0,model=tpm-crb \
+  --disk size=128,format=qcow2,bus=sata \
+  --network network=default,mac=52:54:00:ed:1a:21,model=e1000e \
+  --cdrom /path/to/Win11_Enterprise_Eval.iso \
+  --graphics spice --video qxl --input tablet,bus=usb
+```
+
+1. At OOBE, the Enterprise evaluation still offers a local account: choose
+   **Sign-in options** → **Domain join instead** instead of signing in with a
+   Microsoft account, and name it after `ansible_user`, with the vault password.
+2. Prepare the host for Ansible following
+   [Preparing the Managed Hosts](installation.md#preparing-the-managed-hosts-windows-11-pro):
+   OpenSSH Server, PowerShell as `DefaultShell`, firewall rule for port 22.
+3. Set the static IP of the inventory, netmask `255.255.255.0`, gateway and DNS
+   `192.168.122.1`, and the computer name.
+4. Check from the control node with `ansible teacher -m ansible.windows.win_ping`,
+   shut the VM down and take the snapshot:
+
+   ```bash
+   virsh snapshot-create-as win_edulab-teacher baseline \
+        --description "clean Win11 Enterprise Eval + maint account + OpenSSH"
+   ```
+
+### Debian
+
+Install from the netinst image with the defaults (SSH server, no desktop), the
+`ansible_user` account with sudo and the static address of the inventory. Then
+apply the two network fixes described above — static stanza in
+`/etc/network/interfaces.d/enp1s0`, nameserver in `/etc/resolv.conf` — before
+taking the shut-off `baseline` snapshot.

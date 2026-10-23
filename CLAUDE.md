@@ -103,3 +103,15 @@ Agent instructions and directives for this project.
 - A diagnostic written to answer one question is a `local/` playbook, even when it is well written
 - Promote a playbook from `local/` to `playbooks/` only when it has been generalised: no hardcoded hosts, no site-specific paths, parameters exposed as variables
 - **Caveat**: the `run_playbook` MCP tool resolves names against `playbooks/` only (see `mcp/ansible_runner.py`). Playbooks in `local/` must be run with `ansible-playbook local/<name>.yaml` directly
+
+### 6. Test VMs: general rules here, workstation facts in CLAUDE.local.md
+
+**Rule**: How the test VMs are built, started, reverted and driven is in the skills `win-edulab-test-vms` and `win-edulab-vm-gui`; which machines, ISOs and resources this workstation has, and the standing permissions on them, are in `CLAUDE.local.md` (untracked).
+
+**Why**: The repository is public and used from more than one workstation. VM names, addresses and MACs belong to the `school` inventory, which is the source of truth; host memory, ISO paths and the VMs of other projects differ from one workstation to the next.
+
+**How to apply**:
+- Read `CLAUDE.local.md` before starting, reverting or building a VM; if it is missing, ask the user for the workstation facts instead of guessing
+- Check the host's free memory before starting VMs, every time
+- Build VMs with `tests/vm_build_windows.yaml`; ask before rebuilding or deleting one
+- Never touch libvirt domains that the `school` inventory does not name: they belong to other projects

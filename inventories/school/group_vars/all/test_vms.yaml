@@ -1,0 +1,28 @@
+---
+# Test VMs on the local libvirt instance. tests/virsh.yaml drives them and
+# tests/vm_build_windows.yaml builds them from scratch; each host names its domain
+# in hosts.yaml (libvirt_domain). Paths of the installation ISOs depend on the
+# workstation and are not set here: see test_vm_win11_iso in the build playbook.
+test_vm_libvirt_uri: qemu:///system
+test_vm_network: default
+test_vm_pool: default
+test_vm_gateway: 192.168.122.1
+test_vm_dns: 192.168.122.1
+
+# Windows guests: the evaluation ISO is Italian, and so are the real labs.
+test_vm_win_memory_mib: 4096
+test_vm_win_vcpus: 2
+test_vm_win_disk_gib: 128
+test_vm_win_ui_language: it-IT
+test_vm_win_input_locale: "0410:00000410"
+test_vm_win_timezone: W. Europe Standard Time
+
+# Debian guest of the Samba DC: a plain netinst install with SSH, sudo and the
+# static address; samba_dc_build does the rest.
+test_vm_dc_memory_mib: 2048
+test_vm_dc_vcpus: 2
+test_vm_dc_disk_gib: 20
+test_vm_dc_locale: en_US.UTF-8
+test_vm_dc_keymap: it
+test_vm_dc_timezone: Europe/Rome
+test_vm_dc_mirror: deb.debian.org

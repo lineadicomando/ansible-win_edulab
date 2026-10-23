@@ -3,15 +3,13 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  become: true
+  # The user running the playbook needs access to the system instance (the libvirt
+  # group on Fedora and Debian), not root: no become.
+  environment:
+    LIBVIRT_DEFAULT_URI: "{{ test_vm_libvirt_uri | default('qemu:///system') }}"
   vars:
     snapshot: ~
     cmd: ~
-    vm_map:
-      dc01: "deb13-samba-dc"
-      teacher: "win11-pc00"
-      student01: "win11-pc01"
-      student02: "win11-pc02"
     vm: []
     allowed_cmd:
       - snapshot-revert
@@ -63,15 +61,20 @@
 
     - name: Map inventory hosts to virtual machine names
       ansible.builtin.set_fact:
-        vm_names: "{{ vm_hosts | map('extract', vm_map) | list }}"
+        vm_names: >-
+          {%- set names = [] -%}
+          {%- for h in vm_hosts -%}
+          {%- set _ = names.append(hostvars[h]['libvirt_domain'] | default(none)) -%}
+          {%- endfor -%}
+          {{ names }}
 
-    - name: Validate vm_map coverage for resolved hosts
+    - name: Validate that every resolved host names its VM
       ansible.builtin.assert:
         that:
           - (vm_names | reject('none') | list | length) == (vm_hosts | length)
         fail_msg: >-
-          Mancano mapping in vm_map per uno o più host risolti da vm.
-          Hosts risolti: {{ vm_hosts }}
+          Every host needs libvirt_domain in the inventory.
+          Hosts: {{ vm_hosts }}
           VM names: {{ vm_names }}
 
     # A libvirt network that is not active has no bridge on the host: the VM

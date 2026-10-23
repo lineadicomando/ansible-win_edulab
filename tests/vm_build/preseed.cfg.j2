@@ -1,0 +1,55 @@
+#_preseed_V1
+# Preseed of tests/vm_build_dc.yaml for {{ inventory_hostname }}: Debian netinst with
+# the static address of the inventory, SSH server, sudo and the account
+# {{ ansible_user }}. No root password: {{ ansible_user }} gets sudo, as samba_dc_build
+# expects (become with ansible_become_password).
+
+d-i debian-installer/locale string {{ test_vm_dc_locale }}
+d-i keyboard-configuration/xkb-keymap select {{ test_vm_dc_keymap }}
+
+d-i netcfg/choose_interface select auto
+d-i netcfg/disable_autoconfig boolean true
+d-i netcfg/get_ipaddress string {{ ansible_host }}
+d-i netcfg/get_netmask string {{ samba_dc_build_netmask }}
+d-i netcfg/get_gateway string {{ test_vm_gateway }}
+d-i netcfg/get_nameservers string {{ test_vm_dns }}
+d-i netcfg/confirm_static boolean true
+d-i netcfg/get_hostname string {{ samba_dc_build_fqdn.split('.') | first }}
+d-i netcfg/get_domain string {{ samba_dc_build_search_domain }}
+d-i netcfg/hostname string {{ samba_dc_build_fqdn.split('.') | first }}
+d-i hw-detect/load_firmware boolean false
+
+d-i mirror/country string manual
+d-i mirror/http/hostname string {{ test_vm_dc_mirror }}
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+
+d-i passwd/root-login boolean false
+d-i passwd/user-fullname string {{ ansible_user }}
+d-i passwd/username string {{ ansible_user }}
+d-i passwd/user-password-crypted password {{ test_vm_password_hash }}
+
+d-i clock-setup/utc boolean true
+d-i time/zone string {{ test_vm_dc_timezone }}
+d-i clock-setup/ntp boolean true
+
+d-i partman-auto/disk string /dev/vda
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+d-i apt-setup/cdrom/set-first boolean false
+d-i apt-setup/cdrom/set-next boolean false
+d-i apt-setup/cdrom/set-failed boolean false
+d-i apt-setup/non-free-firmware boolean true
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string sudo python3 qemu-guest-agent
+d-i pkgsel/upgrade select none
+popularity-contest popularity-contest/participate boolean false
+
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string /dev/vda
+d-i finish-install/reboot_in_progress note
