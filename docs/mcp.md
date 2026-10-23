@@ -103,7 +103,7 @@ cp .mcp.json.example .mcp.json
     },
     "samba-dc": {
       "command": "python3",
-      "args": ["/path/to/ansible-collection-samba_dc/mcp/server.py"],
+      "args": ["/path/to/cockpit-samba-dc/ansible/mcp/server.py"],
       "env": {
         "ANSIBLE_PROJECT_ROOT": "/path/to/ansible-win_edulab",
         "ANSIBLE_MCP_DEFAULT_INVENTORY": "school"
