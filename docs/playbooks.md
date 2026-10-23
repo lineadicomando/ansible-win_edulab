@@ -31,7 +31,10 @@ ansible-playbook playbooks/samba_dc_build.yaml
 
 ### `samba_dc_join.yaml` — Join Windows hosts to the domain
 
-Joins Windows 11 workstations to the Samba AD domain.
+Joins Windows 11 workstations to the Samba AD domain, through the `domain`
+role of `lineadicomando.win_workman` (task `domain-join`): it points the
+clients' DNS at the DC, then joins. Variables: `win_workman_domain_*` in
+`group_vars/all`.
 
 ```bash
 ansible-playbook playbooks/samba_dc_join.yaml
