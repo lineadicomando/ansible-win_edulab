@@ -34,7 +34,10 @@ tools/vm/vmgui.py teacher type 'notepad' --enter
 tools/vm/vmgui.py teacher vault ansible_vault_password --enter
 ```
 
-- `<vm>`: inventory host or libvirt domain. `--inventory` selects another inventory.
+- `<vm>`: inventory host or libvirt domain. `--inventory` selects another inventory:
+  a name under `inventories/` or the path of another project's inventory.
+- `secret FILE KEY` types a value from a `KEY=VALUE` file (a project's `.env`), for
+  inventories without a vault. Same rule: only `KEY typed` is printed.
 - `type` uses the guest layout, Italian by default (`--layout us` otherwise); it refuses
   characters missing from the layout instead of typing something else.
 - `vault VAR` types a top-level variable of `inventories/<inv>/group_vars/all/vault.yaml`

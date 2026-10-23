@@ -12,10 +12,13 @@ needs a USB tablet, which tests/vm_build_windows.yaml adds).
     vmgui.py <vm> key KEY_LEFTCTRL KEY_L press a chord (Linux input key names)
     vmgui.py <vm> type "text" [--enter]  type text with the guest keyboard layout
     vmgui.py <vm> vault VAR [--enter]    type a vault variable, never printing it
+    vmgui.py <vm> secret FILE KEY [--enter]
+                                         type KEY of a KEY=VALUE file (.env), never printing it
 
 <vm> is an inventory host (teacher) or a libvirt domain (win_edulab-teacher).
 X and Y are pixels of the last screenshot: take one before clicking.
-Options: --inventory NAME (default school), --layout it|us (default it).
+Options: --inventory NAME|PATH (default school: a name under inventories/, or the path
+of another project's inventory), --layout it|us (default it).
 """
 import argparse
 import json
@@ -40,7 +43,8 @@ def resolve(vm, inventory):
     names = virsh('list', '--all', '--name', capture=True).split()
     if vm in names:
         return vm
-    out = subprocess.run(['ansible-inventory', '-i', f'inventories/{inventory}', '--host', vm],
+    source = inventory if os.sep in inventory else f'inventories/{inventory}'
+    out = subprocess.run(['ansible-inventory', '-i', source, '--host', vm],
                          cwd=ROOT, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if out.returncode != 0:
         sys.exit(f'{vm}: neither a libvirt domain nor a host of inventory {inventory}')
@@ -167,10 +171,25 @@ def vault_value(inventory, var):
     return str(data[var])
 
 
+def env_value(path, key):
+    """KEY=VALUE file, shell style: comments, optional export and quotes."""
+    for line in Path(path).read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        name, value = line.removeprefix('export ').split('=', 1)
+        if name.strip() == key:
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+                value = value[1:-1]
+            return value
+    sys.exit(f'{key} is not in {path}')
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('vm')
-    p.add_argument('action', choices=['shot', 'click', 'move', 'scroll', 'key', 'type', 'vault'])
+    p.add_argument('action', choices=['shot', 'click', 'move', 'scroll', 'key', 'type', 'vault', 'secret'])
     p.add_argument('args', nargs='*')
     p.add_argument('--inventory', default='school')
     p.add_argument('--layout', default='it', choices=sorted(LAYOUTS))
@@ -207,7 +226,10 @@ def main():
         # Slower than plain text: the Windows logon box drops keys typed too fast.
         type_text(domain, vault_value(a.inventory, a.args[0]), a.layout, 0.08)
         print(f'{a.args[0]} typed')
-    if a.enter and a.action in ('type', 'vault'):
+    elif a.action == 'secret':
+        type_text(domain, env_value(a.args[0], a.args[1]), a.layout, 0.08)
+        print(f'{a.args[1]} typed')
+    if a.enter and a.action in ('type', 'vault', 'secret'):
         virsh('send-key', domain, 'KEY_ENTER')
 
 

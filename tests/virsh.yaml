@@ -34,17 +34,18 @@
         fail_msg: "La variabile `snapshot` deve essere valorizzata (es. baseline)."
       when:
         - cmd == 'snapshot-revert'
-    - name: Normalize vm when passed as string
+    # vm usually comes from -e, which set_fact cannot override: normalise it into
+    # another variable. A string may also list several targets: "teacher,student01".
+    - name: Normalize vm into a list
       ansible.builtin.set_fact:
-        vm: ["{{ vm }}"]
-      when: vm is string
+        vm_list: "{{ vm.split(',') | map('trim') | list if vm is string else vm }}"
 
     - name: Validate vm input
       ansible.builtin.assert:
         that:
-          - vm is sequence
-          - vm | length > 0
-        fail_msg: "Passa `vm` come lista non vuota di host/gruppi di inventario."
+          - vm_list is sequence
+          - vm_list | length > 0
+        fail_msg: "Pass `vm` as an inventory host or group, or a non-empty list of them."
 
     - name: Expand vm entities to inventory hosts
       ansible.builtin.set_fact:
@@ -53,7 +54,7 @@
             vm_hosts | default([]) +
             query('inventory_hostnames', item)
           }}
-      loop: "{{ vm }}"
+      loop: "{{ vm_list }}"
 
     - name: Deduplicate expanded hosts
       ansible.builtin.set_fact:
