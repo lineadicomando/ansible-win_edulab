@@ -53,6 +53,10 @@ ansible-playbook tests/vm_build_windows.yaml -e vm=teacher \
   PowerShell as DefaultShell, firewall, no sleep/hibernation, static IP) → SSH check →
   evaluation end date reported → shutdown → media ejected → `baseline` snapshot.
 - Build one Windows VM at a time unless memory allows more.
+- Parallel builds must not start at the same moment: while one build uploads a volume,
+  `virt-install` of another fails with "pool 'default' has asynchronous jobs running".
+  Start the next build once the previous one has reached "Wait for the first phase"
+  (Windows) or has created its domain (DC).
 - After the build, write the date and the reported evaluation end in `CLAUDE.local.md`.
 
 ### When the build stalls
