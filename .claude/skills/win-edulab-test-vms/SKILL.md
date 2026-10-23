@@ -73,6 +73,13 @@ If automation keeps failing, the manual procedure in `docs/test-vms.md` (Windows
 inside the VM) still applies: guide the user step by step, then take the `baseline`
 snapshot shut off.
 
+### For another project
+
+Another project builds its own VM with these playbooks and its own inventory
+(`ansible-playbook -i <its inventory> tests/vm_build_windows.yaml -e vm=<host>`).
+Requirements and the `.env` pattern: `docs/test-vms.md`, "From another project".
+Connection variables go under `win_managed`, never `all` (plays on localhost break).
+
 ## Building the DC VM from scratch
 
 ```bash

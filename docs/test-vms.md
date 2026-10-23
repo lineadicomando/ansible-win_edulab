@@ -217,6 +217,26 @@ and takes the `baseline` snapshot. The domain is provisioned by
 `tests/samba_dc_build.yaml` or `tests/samba_dc.yaml`, which start from that
 snapshot.
 
+### From another project
+
+The build playbooks, `tests/virsh.yaml` and `tools/vm/vmgui.py` take any inventory,
+so a project that needs its own Windows VM does not copy them:
+
+```bash
+ansible-playbook -i /path/to/other/inventory.yaml tests/vm_build_windows.yaml -e vm=<host>
+tools/vm/vmgui.py --inventory /path/to/other/inventory.yaml <host> shot
+```
+
+That inventory must give the host `libvirt_domain`, `ansible_host`, `ansible_mac`, put
+it in a `win_managed` group, and define `ansible_user`, `ansible_password`,
+`ansible_subnet`, the `test_vm_*` variables of `group_vars/all/test_vms.yaml` and
+`test_vm_win11_iso`. Keep the connection settings (`ansible_connection: ssh`,
+`ansible_shell_type: powershell`, the password) in the `win_managed` group rather than
+in `all`: the playbooks also run plays on `localhost`. The password can come from a
+`.env` file of that project with
+`lookup('ansible.builtin.ini', 'KEY', type='properties', file=...)`, and
+`vmgui.py ... secret <file> KEY` types it at the logon screen.
+
 ---
 
 ## The `baseline` snapshot
