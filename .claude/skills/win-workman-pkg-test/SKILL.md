@@ -15,32 +15,23 @@ through `playbooks/win_wm.yaml` via the `-l <host>` limit and `-e '{"t":"<task>"
 
 ## VM lifecycle
 
+The test VMs, their resources check, `tests/virsh.yaml` and the `baseline` snapshot are
+covered by the skill `win-edulab-test-vms`; read it (and `CLAUDE.local.md`) before
+starting VMs. The short version for a package test:
+
 ### 1. Revert to baseline snapshot
 
 ```bash
 ansible-playbook tests/virsh.yaml -e '{"vm":["teacher"],"cmd":"snapshot-revert","snapshot":"baseline"}'
 ```
 
-`vm` accepts inventory hostnames or group names. The playbook maps them to virsh VM names
-via its own `vm_map`, defined in `tests/virsh.yaml` — read that mapping there rather than
-assuming a naming scheme. After revert the VM is powered off.
+`vm` accepts inventory hostnames or group names; each host names its VM in the inventory
+(`libvirt_domain`). After revert the VM is powered off.
 
-`cmd` is restricted to the values in the playbook's `allowed_cmd` list. Use `start` when the
-VM is simply powered off and you do not want to discard its current state; `snapshot-revert`
-throws away everything since the snapshot.
-
-**Three Windows VMs carry a `baseline` snapshot:** `teacher`, `student01` and `student02`.
-Revert, wake and test all three in one go when a change touches shared code — one VM for
-the branch you modified, the others for regression on roles that must be unaffected. Pass
-them together (`"vm":["teacher","student01","student02"]`, then `-l teacher,student01,student02`
-for `wol` and `secure_ssh`) and start one `run_tasks` per VM in the background so the
-lifecycles run in parallel.
-
-**Mind the control node's memory.** It has 15 GiB of RAM; each Windows VM takes
-4 GiB and the DC 2 GiB, 14 GiB for all four. With all four up the kernel ran out
-of memory on 2026-09-30 and killed desktop processes (the MCP server's uvicorn,
-the editor). Run at most two Windows VMs together, or one plus the DC, and check
-`free -h` before waking more.
+**Two Windows VMs carry a `baseline` snapshot:** `teacher` and `student01`. When a change
+touches shared code, test on both — one for the branch you modified, the other for
+regression on roles that must be unaffected — and start one `run_tasks` per VM in the
+background so the lifecycles run in parallel, if the host has the memory for both.
 
 ### 2. Power on (Wake-on-LAN)
 

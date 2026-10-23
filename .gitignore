@@ -1,4 +1,5 @@
 .claude/settings.local.json
+CLAUDE.local.md
 .mcp.json
 *.pyc
 __pycache__/

@@ -1,6 +1,9 @@
 ---
 # Example inventory, and home of the test VMs. Copy it to start a new one.
 #
+# libvirt_domain names the test VM behind each host: tests/virsh.yaml and the
+# tests/vm_build_*.yaml playbooks read it. Real labs leave it out.
+#
 # Every host is declared once, with its address, under the group that says what it
 # is: servers, teachers or students. The other groups only name hosts or groups
 # that already exist, so adding a PC means one entry here plus one in its lab.
@@ -9,36 +12,34 @@ all:
     servers:
       hosts:
         dc01:
-          ansible_host: 192.168.122.2
-          ansible_mac: 52:54:00:38:64:a0
+          ansible_host: 192.168.122.20
+          ansible_mac: 52:54:00:ed:1a:20
+          libvirt_domain: win_edulab-samba-dc
     # Role groups: the teacher PC runs the Veyon Master, the students are its agents
     # (group_vars/teachers, group_vars/students). ansible_mac is needed by wol and veyon.
     teachers:
       hosts:
         teacher:
-          ansible_host: 192.168.122.10
-          ansible_mac: 52:54:00:1c:82:8e
+          ansible_host: 192.168.122.21
+          ansible_mac: 52:54:00:ed:1a:21
+          libvirt_domain: win_edulab-teacher
     students:
       hosts:
         student01:
-          ansible_host: 192.168.122.11
-          ansible_mac: 52:54:00:a6:db:78
-        student02:
-          ansible_host: 192.168.122.12
-          ansible_mac: 52:54:00:bf:d8:d6
+          ansible_host: 192.168.122.22
+          ansible_mac: 52:54:00:ed:1a:22
+          libvirt_domain: win_edulab-student01
     # Vertical groups: one per lab, listing its PCs directly. They are the default
     # targets of playbooks/lab_cad.yaml and playbooks/lab_coding.yaml. Real labs rarely
-    # share machines; the three test VMs here belong to both.
+    # share machines; the two Windows test VMs here belong to both.
     lab_cad:
       hosts:
         teacher:
         student01:
-        student02:
     lab_coding:
       hosts:
         teacher:
         student01:
-        student02:
     # Transversal group: every managed Windows PC, whatever lab it sits in, built
     # from the labs. It carries the connection settings (group_vars/win_managed) and is
     # the default target of the playbooks: wol, shutdown, veyon, maintenance.

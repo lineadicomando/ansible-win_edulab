@@ -1,0 +1,280 @@
+---
+# Build the Debian VM of the Samba DC from scratch, with no manual step: Debian netinst
+# driven by a preseed, the account and password of the inventory with sudo, SSH, the
+# static address laid out the way samba_dc_build expects it, then a shut-off `baseline`
+# snapshot. The domain itself is not provisioned here: tests/samba_dc_build.yaml and
+# tests/samba_dc.yaml start from this baseline and run samba_dc_build.
+#
+#   ansible-playbook tests/vm_build_dc.yaml                  # the samba_dc group
+#   ansible-playbook tests/vm_build_dc.yaml -e rebuild=true  # destroys the existing VM
+#
+# test_vm_debian_iso is the path of a Debian 13 netinst ISO: pass it with -e, or set it
+# in local/test_vms.yaml, which this playbook loads when present. The installer fetches
+# packages from test_vm_dc_mirror, so the host needs Internet. About 10 minutes.
+
+- name: Build the Debian VM of the Samba DC
+  hosts: "{{ vm | default('samba_dc') }}"
+  gather_facts: false
+  vars:
+    rebuild: false
+    test_vm_local_vars: "{{ playbook_dir }}/../local/test_vms.yaml"
+    test_vm_preseed_volume: "{{ libvirt_domain }}-preseed"
+    test_vm_dc_install_timeout: 3600
+  tasks:
+    - name: Prepare and run the installation
+      delegate_to: localhost
+      environment:
+        LIBVIRT_DEFAULT_URI: "{{ test_vm_libvirt_uri }}"
+        LC_ALL: C
+      block:
+        - name: Load the workstation settings
+          ansible.builtin.include_vars:
+            file: "{{ test_vm_local_vars }}"
+          when: test_vm_local_vars is file
+
+        - name: Check that the host is the DC test VM and the ISO is there
+          ansible.builtin.assert:
+            that:
+              - libvirt_domain is defined
+              - inventory_hostname in groups['samba_dc']
+              - test_vm_debian_iso is defined
+              - test_vm_debian_iso is file
+            fail_msg: >-
+              {{ inventory_hostname }} needs libvirt_domain in hosts.yaml and must be in
+              samba_dc; test_vm_debian_iso must point to the ISO
+              ({{ test_vm_debian_iso | default('not set') }}).
+
+        - name: Look for an existing VM
+          ansible.builtin.command:
+            cmd: "virsh dominfo {{ libvirt_domain }}"
+          register: test_vm_existing
+          changed_when: false
+          failed_when: false
+          check_mode: false
+
+        - name: Stop if the VM exists and rebuild was not asked for
+          ansible.builtin.fail:
+            msg: >-
+              {{ libvirt_domain }} already exists. Pass -e rebuild=true to destroy it,
+              its disk and its snapshots, and build it again.
+          when:
+            - test_vm_existing.rc == 0
+            - not (rebuild | bool)
+
+        - name: Read the memory available on the host
+          ansible.builtin.shell:
+            cmd: awk '/^MemAvailable/ {print int($2 / 1024)}' /proc/meminfo
+          register: test_vm_mem_available
+          changed_when: false
+          check_mode: false
+
+        - name: Check that the VM fits in the available memory
+          ansible.builtin.assert:
+            that:
+              - test_vm_dc_memory_mib | int <= test_vm_mem_available.stdout | int
+            fail_msg: >-
+              The VM needs {{ test_vm_dc_memory_mib }} MiB, the host has
+              {{ test_vm_mem_available.stdout }} MiB available.
+
+        - name: Remove the existing VM
+          when: test_vm_existing.rc == 0
+          block:
+            - name: Power off the existing VM
+              ansible.builtin.shell:
+                cmd: >-
+                  [ "$(virsh domstate {{ libvirt_domain }})" = "shut off" ]
+                  || virsh destroy {{ libvirt_domain }}
+              changed_when: true
+
+            - name: Undefine the existing VM with its disks and snapshots
+              ansible.builtin.shell:
+                executable: /bin/bash
+                cmd: >-
+                  set -o pipefail;
+                  disks=$(virsh domblklist {{ libvirt_domain }} --details
+                  | awk '$2 == "disk" {print $3}' | paste -sd, -) &&
+                  virsh undefine {{ libvirt_domain }} --nvram --snapshots-metadata
+                  ${disks:+--storage "$disks"}
+              changed_when: true
+
+        # The preseed carries the password hash: it is written to a private directory
+        # under /tmp and only reaches the installer's initrd, never the work tree.
+        - name: Write the preseed and install Debian
+          block:
+            - name: Create a private build directory
+              ansible.builtin.tempfile:
+                state: directory
+                suffix: -edulab
+              register: test_vm_tmp
+
+            - name: Hash the password of the account
+              ansible.builtin.command:
+                argv: [openssl, passwd, -6, -stdin]
+                stdin: "{{ ansible_password }}"
+              register: test_vm_password_hash_cmd
+              changed_when: false
+              no_log: true
+
+            - name: Write the preseed
+              ansible.builtin.template:
+                src: "{{ playbook_dir }}/vm_build/preseed.cfg.j2"
+                dest: "{{ test_vm_tmp.path }}/preseed.cfg"
+                mode: "0600"
+              vars:
+                test_vm_password_hash: "{{ test_vm_password_hash_cmd.stdout }}"
+              no_log: true
+
+            # --noreboot: virt-install returns when the installer reboots, leaving the
+            # VM off; it is then started with its final configuration (boot from disk).
+            - name: Create the VM and run the Debian installer
+              ansible.builtin.command:
+                argv:
+                  - virt-install
+                  - --name={{ libvirt_domain }}
+                  - --osinfo=debian13
+                  - --memory={{ test_vm_dc_memory_mib }}
+                  - --vcpus={{ test_vm_dc_vcpus }}
+                  - --cpu=host-passthrough
+                  - --machine=q35
+                  - --disk=pool={{ test_vm_pool }},size={{ test_vm_dc_disk_gib }},format=qcow2,bus=virtio
+                  - --location={{ test_vm_debian_iso }}
+                  - --initrd-inject={{ test_vm_tmp.path }}/preseed.cfg
+                  - --extra-args=auto=true priority=critical
+                  - --network=network={{ test_vm_network }},mac={{ ansible_mac }},model=virtio
+                  - --channel=unix,target.type=virtio,target.name=org.qemu.guest_agent.0
+                  - --graphics=spice
+                  - --noautoconsole
+                  - --noreboot
+                  - --wait={{ (test_vm_dc_install_timeout | int / 60) | int }}
+              changed_when: true
+          always:
+            - name: Remove the build directory
+              ansible.builtin.file:
+                path: "{{ test_vm_tmp.path }}"
+                state: absent
+              when: test_vm_tmp.path is defined
+
+        - name: Start the installed system
+          ansible.builtin.command:
+            cmd: "virsh start {{ libvirt_domain }}"
+          changed_when: true
+
+    - name: Wait for SSH at the static address of the inventory
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 300
+      delegate_to: localhost
+
+    - name: Lay out the network the way samba_dc_build expects it
+      become: true
+      block:
+        - name: Read the network facts
+          ansible.builtin.setup:
+            gather_subset: [network]
+
+        - name: Check the interface name the role will configure
+          ansible.builtin.assert:
+            that:
+              - ansible_facts.default_ipv4.interface == samba_dc_build_ifname
+              - ansible_facts.default_ipv4.address == ansible_host
+            fail_msg: >-
+              The VM reaches the network through {{ ansible_facts.default_ipv4.interface }}
+              ({{ ansible_facts.default_ipv4.address }}), samba_dc_build_ifname is
+              {{ samba_dc_build_ifname }} and ansible_host is {{ ansible_host }}.
+
+        # The installer writes the static stanza into /etc/network/interfaces; the role
+        # writes its own into interfaces.d/, and two stanzas for one interface collide
+        # at the next ifup. Move it now, with the exact content the role writes, so the
+        # VM boots with its address before and after the role runs.
+        - name: Write the interface stanza where samba_dc_build writes it
+          ansible.builtin.copy:
+            dest: "/etc/network/interfaces.d/{{ samba_dc_build_ifname }}"
+            content: |
+              iface {{ samba_dc_build_ifname }} inet static
+                  address {{ samba_dc_build_address }}
+                  netmask {{ samba_dc_build_netmask }}
+                  gateway {{ samba_dc_build_gateway }}
+                  dns-nameservers {{ samba_dc_build_nameserver }}
+                  dns-search {{ samba_dc_build_search_domain }}
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Leave only the loopback and the include in /etc/network/interfaces
+          ansible.builtin.copy:
+            dest: /etc/network/interfaces
+            content: |
+              # Written by tests/vm_build_dc.yaml. The address of
+              # {{ samba_dc_build_ifname }} is in interfaces.d/, where samba_dc_build keeps it.
+              source /etc/network/interfaces.d/*
+
+              auto lo
+              iface lo inet loopback
+
+              allow-hotplug {{ samba_dc_build_ifname }}
+            owner: root
+            group: root
+            mode: "0644"
+
+        # samba_dc_build runs apt before it rewrites the resolver.
+        - name: Give the host a resolver
+          ansible.builtin.copy:
+            dest: /etc/resolv.conf
+            content: |
+              search {{ samba_dc_build_search_domain }}
+              nameserver {{ samba_dc_build_nameserver }}
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Reboot to check the VM comes back with its address
+          ansible.builtin.reboot:
+            reboot_timeout: 300
+
+        - name: Check the address after the reboot
+          ansible.builtin.command:
+            cmd: "ip -4 -o addr show dev {{ samba_dc_build_ifname }}"
+          register: test_vm_dc_addr
+          changed_when: false
+          failed_when: (ansible_host ~ '/') not in test_vm_dc_addr.stdout
+
+    - name: Take the baseline snapshot
+      delegate_to: localhost
+      environment:
+        LIBVIRT_DEFAULT_URI: "{{ test_vm_libvirt_uri }}"
+        LC_ALL: C
+      block:
+        - name: Shut the VM down
+          ansible.builtin.shell:
+            cmd: >-
+              for i in $(seq 1 30); do
+              [ "$(virsh domstate {{ libvirt_domain }})" = "shut off" ] && exit 0;
+              [ $((i % 6)) -eq 1 ] && virsh shutdown {{ libvirt_domain }} >/dev/null 2>&1;
+              sleep 10;
+              done; exit 1
+          changed_when: true
+
+        - name: Eject any installation media
+          ansible.builtin.shell:
+            executable: /bin/bash
+            cmd: >-
+              set -o pipefail;
+              for t in $(virsh domblklist {{ libvirt_domain }} --details
+              | awk '$2 == "cdrom" && $4 != "-" {print $3}'); do
+              virsh change-media {{ libvirt_domain }} "$t" --eject --config || exit 1;
+              done
+          changed_when: false
+
+        - name: Create the baseline snapshot
+          ansible.builtin.command:
+            argv:
+              - virsh
+              - snapshot-create-as
+              - "{{ libvirt_domain }}"
+              - baseline
+              - --description
+              - >-
+                Debian 13 netinst, account {{ ansible_user }} with sudo, SSH,
+                {{ ansible_host }} in interfaces.d; built by tests/vm_build_dc.yaml
+          changed_when: true
