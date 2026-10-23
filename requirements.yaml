@@ -2,8 +2,8 @@
 collections:
   - name: git+https://github.com/lineadicomando/ansible-collection-win_workman.git
     type: git
-    version: main
+    version: v0.3.0
 
   - name: git+https://github.com/lineadicomando/ansible-collection-samba_dc.git
     type: git
-    version: main
+    version: v0.7.0
