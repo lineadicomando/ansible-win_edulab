@@ -7,4 +7,4 @@ collections:
   # In the ansible/ directory of cockpit-samba-dc since v0.8.0
   - name: git+https://github.com/lineadicomando/cockpit-samba-dc.git#/ansible/
     type: git
-    version: v0.8.0
+    version: v0.9.0

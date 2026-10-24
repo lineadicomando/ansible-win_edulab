@@ -4,9 +4,11 @@ The `mcp/` directory contains an MCP (Model Context Protocol) server that expose
 this project to Claude Code. It lets you manage lab workstations in natural language:
 "install Chrome on teacher", "run chkdsk on all students", and so on.
 
-It works alongside two servers shipped with the collections: **win-workman**
-(`run_tasks`, `get_role_info`) and **samba-dc** (`samba`, `samba_dc_backup`). Their
-tools are documented here too, since the three are used together.
+It works alongside the servers of the collections: **win-workman** (`run_tasks`,
+`get_role_info`), **samba-dc** (`samba_dc_build`, `samba_dc_backup`), and
+**addcctl**, which runs on the domain controller and manages its users, groups,
+computers, home directories and shared folders. Their tools are documented here too,
+since they are used together.
 
 ## Architecture
 
@@ -109,6 +111,10 @@ cp .mcp.json.example .mcp.json
         "ANSIBLE_MCP_DEFAULT_INVENTORY": "school"
       }
     },
+    "addcctl": {
+      "command": "ssh",
+      "args": ["-T", "mcp@dc01.example.org", "sudo", "-n", "/usr/bin/addcctl", "mcp"]
+    },
     "win-edulab": {
       "command": "python3",
       "args": ["./mcp/server.py"]
@@ -122,7 +128,10 @@ the copy installed by `ansible-galaxy`, e.g.
 `ansible_collections/lineadicomando/win_workman/mcp/server.py`. They find the
 inventories through `ANSIBLE_PROJECT_ROOT`, which must point at this project.
 samba-dc has no default inventory of its own: `ANSIBLE_MCP_DEFAULT_INVENTORY`
-gives it `school`, as win-workman has.
+gives it `school`, as win-workman has. addcctl is started on the DC through SSH, as a
+user allowed to run that one command as root: see
+[its section](#users-groups-computers-home-directories-shared-folders-addcctl) for
+the setup, and put the DC's address in `args`.
 
 `args` can use paths relative to the project root. Claude Code sets the working
 directory to the project root before launching the server.
@@ -353,51 +362,66 @@ start runs (win-edulab and win-workman) expose them. See
 
 ---
 
-### `samba`
+### `samba_dc_build`
 
-*Server: samba-dc.* Manages the Samba AD Domain Controller via `samba-tool`,
-through the `lineadicomando.samba_dc.samba` playbook. Requires the `samba_dc`
-collection installed in the Ansible environment and the DC present in the
-inventory; `l` should target a single DC.
+*Server: samba-dc.* Builds a Samba AD Domain Controller on Debian 13 through the
+`lineadicomando.samba_dc.samba_dc_build` playbook (packages, network, Kerberos, DNS,
+NTP, firewall, domain provisioning, `addcctl` and the Cockpit page). The
+`samba_dc_build_*` variables come from the inventory; `args` overrides them.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `object` | string | yes | — | `user`, `group`, `computer`, `ou`, `home`, `share` |
-| `action` | string | yes | — | samba-tool verb |
-| `args` | object | no | `{}` | Action-specific arguments; `name` is required for every action except `list` |
-| `l` | string | no | `all` | Host pattern, passed to the playbook as `target_hosts` |
+| `args` | object | no | `{}` | Role variables without the `samba_dc_build_` prefix |
+| `l` | string | no | `all` | Host pattern, passed as `target_hosts` |
 | `inventory` | string | no | `school` | Inventory name |
 | `preview` | boolean | no | `false` | Return the command without executing it |
 
-Common actions per object:
+It changes the system and may reboot it: always preview first and confirm with the
+user. `force_provision: true` destroys the existing domain and also needs
+`force_provision_confirm: true`. Run again on a built DC, it brings the configuration
+back and leaves the domain as it is.
 
-| Object | Actions |
-|--------|---------|
-| `user` | `list`, `show`, `create`, `present`, `delete`, `absent`, `enable`, `disable`, `setpassword`, `setprimarygroup` |
-| `group` | `list`, `show`, `listmembers`, `add`, `create`, `delete`, `absent`, `addmembers`, `removemembers` |
-| `computer` | `list`, `show`, `create`, `delete`, `absent` |
-| `ou` | `list`, `listobjects`, `create`, `delete`, `absent` |
-| `home` | `provision`, `absent` — the physical home directory, its LDAP attributes and the SMB share |
+---
 
-Read-only actions (`list`, `show`, `listmembers`, `listobjects`) never change
-state; mutating user actions are idempotent. Use `preview: true` for destructive
-actions (`delete`, `absent`, `disable`, `removemembers`) and confirm with the user
-before executing.
+### Users, groups, computers, home directories, shared folders: `addcctl`
+
+*Server: addcctl, on the DC.* Day-two management of the domain is not an Ansible
+playbook any more: since `lineadicomando.samba_dc` v0.9.0 the samba-dc server has no
+`samba` tool. It is `addcctl mcp`, the MCP server of cockpit-samba-dc's core, which
+runs on the DC itself and is reached through SSH; it makes the same changes as the
+Cockpit page and the collection's modules.
+
+One tool per operation (`addcctl schema` on the DC lists them with their input):
+
+| Object | Tools |
+|--------|-------|
+| user | `user_list`, `user_get`, `user_create`, `user_set` (groups, status, expiry, rename), `user_password`, `user_unlock`, `user_delete` |
+| group | `group_list`, `group_get`, `group_create`, `group_set` (members, rename), `group_delete` |
+| computer | `computer_list`, `computer_get`, `computer_create`, `computer_delete` |
+| home directory | `home_provision`, `home_delete` |
+| shared folder | `share_list`, `share_get`, `share_set` (access, drive mapping), `share_delete`, `share_rename_principal` |
+| domain | `domain_password_policy` |
+
+A tool that changes something takes `"check": true`, which reports what it would do
+and changes nothing: the equivalent of `preview`. Use it before every destructive
+call (`*_delete`, `home_delete` with `delete_data`, `share_set` that removes access)
+and confirm with the user. Passwords are never in a result; every change is logged
+on the DC (`journalctl -t addcctl-mcp`). OUs are not there yet (cockpit-samba-dc
+`TODO.md`, section 5).
 
 ```
-Tool call: samba(object="user", action="create",
-                 args={"name": "alice", "password": "..."},
-                 l="dc01", preview=true)
-
-Response:
-  Command to run:
-
-    ansible-playbook lineadicomando.samba_dc.samba \
-      -i '/path/to/ansible-win_edulab/inventories/school/hosts.yaml' \
-      -e '{"samba_tool_object": "user", "samba_tool_action": "create", ..., "target_hosts": "dc01"}'
-
-  No command executed.
+Tool call: user_create(name="alice", password="...", groups=["Students"], check=true)
+Tool call: home_provision(name="alice")
+Tool call: share_set(name="Materiali", access=[{"name": "Teachers", "level": "write"},
+                     {"name": "Students"}], drive={"letter": "M"})
 ```
+
+Setup on the DC, once, for a user `mcp` (README of cockpit-samba-dc, "MCP server on
+the DC"): `/etc/sudoers.d/addcctl-mcp` with `mcp ALL=(root) NOPASSWD: /usr/bin/addcctl
+mcp`, and the client's key in `~mcp/.ssh/authorized_keys` bound to that command
+(`restrict,command="sudo -n /usr/bin/addcctl mcp" ssh-ed25519 …`). The `mcp` user has
+the power of a domain administrator over what `addcctl` manages; with `addcctl mcp
+--read-only` in both files the client can only look.
 
 ---
 
@@ -470,7 +494,7 @@ logs/
 ```
 
 Leave a terminal open on the symlink and you see whatever starts next, from any of the
-three MCP servers:
+three MCP servers that run Ansible (addcctl logs on the DC instead):
 
 ```bash
 tail -F logs/latest.log
@@ -497,7 +521,8 @@ control node for as long as the run lasts. The tools keep it out of both:
 |------|-----------------------|
 | `run_tasks`, `run_playbook` | `sensitive_vars`, never `extra_vars` or `e` |
 | `run_powershell` | `sensitive_parameters` |
-| `samba`, `samba_dc_backup` | `args.password` and `args.domain_password`, recognised by the server |
+| `samba_dc_build`, `samba_dc_backup` | `args.administrator_passwd` and `args.domain_password`, recognised by the server |
+| addcctl tools | `password` in the tool's input: it reaches `addcctl` on stdin, never a command line or a log |
 
 A run that carries one hands its extra vars to Ansible through a temporary file only
 its owner can read, removed when the run ends, and the log shows the command with the
@@ -638,9 +663,9 @@ mcp/
 - `run_status(run, since_line, max_lines)` / `wait_run(run, timeout, since_line,
   max_lines, notify)` — read a run's log now, or once it ends
 
-The `run_tasks` and `samba` tools documented above belong to the `win-workman` and
-`samba-dc` MCP servers, which live in their own collections and keep their own
-command builders.
+The `run_tasks`, `samba_dc_build` and `samba_dc_backup` tools documented above
+belong to the `win-workman` and `samba-dc` MCP servers, which live in their own
+collections and keep their own command builders; the addcctl tools run on the DC.
 
 ### `runlog.py`
 

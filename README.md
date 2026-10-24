@@ -36,7 +36,7 @@ The complete documentation for the project is divided into thematic sections in 
 - **[Architecture and Project Structure](docs/architecture.md)**
   Architecture diagram and full directory tree layout.
 - **[MCP and Claude Code Integration](docs/claude_code.md)**
-  List of Claude Code skills and an overview of the three integrated MCP servers.
+  List of Claude Code skills and an overview of the integrated MCP servers.
 - **[MCP Server Documentation](docs/mcp.md)**
   Comprehensive technical manual for installing, configuring, and using the tools provided by the MCP servers.
 
