@@ -29,8 +29,17 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 
 | Tool | When to use |
 |------|-------------|
-| `samba` | AD object management (users, groups, computers, OUs, home directories, shared folders) via samba-tool |
+| `samba_dc_build` | Build (or bring back the configuration of) the Samba AD DC |
 | `samba_dc_backup` | DC backup and restore |
+
+### addcctl server (on the DC)
+
+| Tool | When to use |
+|------|-------------|
+| `user_*`, `group_*`, `computer_*` | Domain accounts: list, get, create, change, delete |
+| `home_provision`, `home_delete` | Users' home directories (H:) |
+| `share_*` | Shared folders and their drive mapping |
+| `domain_password_policy` | The password and lockout settings |
 
 ---
 
@@ -129,7 +138,7 @@ Other `$Ansible` members: `Changed`, `Failed`, `Tmpdir`, `Diff`.
 - `error_action` defaults to `stop`: an error record fails the task instead of
   passing unnoticed.
 - `l` is **required** and has no default. More than 3 hosts needs `confirm=true`.
-- Windows hosts only; the Linux DC is the samba-dc server's job.
+- Windows hosts only; the Linux DC is the job of the samba-dc and addcctl servers.
 
 ### Examples
 
@@ -206,8 +215,8 @@ of the command line and are masked in the log, in the output and in a preview:
   "sensitive_vars": { "win_workman_autologon_password": "..." } }
 ```
 
-The samba-dc tools do the same on their own for `args.password` and
-`args.domain_password`.
+The samba-dc tools do the same on their own for `args.administrator_passwd` and
+`args.domain_password`; the addcctl tools never put a password on a command line.
 
 **run_playbook** — for standalone playbooks with their own logic:
 
@@ -249,82 +258,70 @@ Discovered via `get_inventory`; groups common to most inventories:
 
 ## Samba AD DC operations
 
-The `samba` and `samba_dc_backup` tools target `samba_dc` by default. Explicit `l` is only needed to override (e.g. multi-DC environments).
+Two servers: **samba-dc** (`samba_dc_build`, `samba_dc_backup`: playbooks, target
+`samba_dc` by default) and **addcctl** (`addcctl mcp` on the DC, through SSH: users,
+groups, computers, home directories, shared folders). There is no `samba` tool any
+more (collection v0.9.0); OUs have no tool yet.
 
-### Standard workflow
+### Standard workflow (addcctl)
 ```
-1. get_inventory            → verify samba_dc group and DC hostname
-2. samba (preview=true)     → confirm command before any mutating action
-3. samba                    → execute
-```
-
-**Rule**: always use `preview=true` before destructive actions (`delete`, `absent`, `disable`, `removemembers`, `home-absent`, `share-revoke`, restore).
-
-### samba — object actions
-
-| Object | Actions |
-|--------|---------|
-| `user` | `list`, `show`, `create`, `present`, `delete`, `absent`, `enable`, `disable`, `setpassword`, `setprimarygroup` |
-| `group` | `list`, `show`, `listmembers`, `add`, `create`, `delete`, `absent`, `addmembers`, `removemembers` |
-| `computer` | `list`, `show`, `create`, `delete`, `absent` |
-| `ou` | `list`, `listobjects`, `create`, `delete`, `absent` |
-| `home` | `provision`, `absent` |
-| `share` | `list`, `show`, `create`, `present`, `grant`, `revoke`, `delete`, `absent` |
-
-`present`/`absent` are idempotent aliases: `present` = create-or-enable; `absent` = delete-or-skip-if-missing.
-
-#### home — user directory provisioning
-
-Replicates the cockpit-samba-dc logic: creates the physical directory, sets the LDAP attributes `homeDrive`/`homeDirectory` via `ldbmodify`, and ensures the SMB share exists.
-
-| Argument | Default | Notes |
-|----------|---------|-------|
-| `name` | — | **required** — sAMAccountName of the user |
-| `home_base` | `/srv/samba/home` | base path for home directories, the one cockpit-samba-dc uses |
-| `home_drive` | `H:` | Windows drive letter |
-| `share_name` | `home` | SMB share name (created only if it does not exist) |
-
-`absent` removes the physical directory and clears the LDAP attributes. It is **destructive** — always use `preview=true`.
-
-Examples:
-```json
-{ "object": "user", "action": "list" }
-{ "object": "user", "action": "create", "args": { "name": "alice", "password": "Secret123!" } }
-{ "object": "user", "action": "present", "args": { "name": "alice", "password": "Secret123!" } }
-{ "object": "group", "action": "addmembers", "args": { "name": "staff", "members": ["alice", "bob"] } }
-{ "object": "home", "action": "provision", "args": { "name": "alice" } }
-{ "object": "home", "action": "provision", "args": { "name": "alice", "home_drive": "H:", "share_name": "home" } }
-{ "object": "home", "action": "absent", "args": { "name": "alice" }, "preview": true }
+1. user_list / group_list / share_list   → look before changing
+2. <tool> with "check": true             → what it would change, nothing changed
+3. <tool>                                → execute, after the user confirms
 ```
 
-#### share — shared folders
+**Rule**: always `"check": true` first for destructive calls (`user_delete`,
+`group_delete`, `computer_delete`, `home_delete`, `share_delete`, a `share_set` or
+`group_set` that removes entries) and confirm with the user.
 
-The same shares as the **Shared folders** tab of cockpit-samba-dc: whatever
-is created here shows up in Cockpit and vice versa. Folder
-`/srv/samba/shares/<name>`, access enforced by the share (`valid users`/`read list`)
-and by a POSIX ACL, optional drive mapping at logon through the
-**Cockpit - Mapped drives** GPO. Registry shares outside `/srv/samba/shares`
-(such as `home`) are never touched.
+### addcctl — tools
 
-| Argument | Notes |
-|----------|-------|
-| `name` | **required** except for `list` |
-| `access` | list of `{name, kind, level}`; `kind` `user`/`group` is looked up when omitted, `level` `read` (default) or `write` |
-| `read`, `write` | shorthands: lists of names |
-| `comment`, `browseable` | `""` removes the comment; settings left out stay as they are |
-| `drive_letter`, `drive_label` | E–Z except H; `""` removes the mapping |
-| `delete_data` | `delete`/`absent` only; default `false` keeps the folder on disk |
+| Object | Tools |
+|--------|-------|
+| user | `user_list`, `user_get`, `user_create`, `user_set`, `user_password`, `user_unlock`, `user_delete` |
+| group | `group_list`, `group_get`, `group_create`, `group_set`, `group_delete` |
+| computer | `computer_list`, `computer_get`, `computer_create`, `computer_delete` |
+| home | `home_provision`, `home_delete` |
+| share | `share_list`, `share_get`, `share_set`, `share_delete`, `share_rename_principal` |
+| domain | `domain_password_policy` |
 
-`create`/`present` replace the access list when one is given; `grant` adds
-entries or changes their level; `revoke` removes them (destructive — preview first).
+The input of each tool is in its schema (the MCP client shows it): names are
+sAMAccountNames; `user_set` and `group_set` change only what they are given and take
+`groups`/`members` with a `*_mode` of `replace` (default), `append` or `remove`;
+`new_name` renames the account and its entries in the shared folders.
+
+**home_provision** creates `/srv/samba/home/<user>`, sets `homeDrive` (default `H:`)
+and `homeDirectory`, and makes sure the hidden `home` share serves it.
+`home_delete` clears the attributes; with `delete_data: true` it also removes the
+folder (destructive).
+
+**share_set** is the **Shared folders** tab of cockpit-samba-dc: whatever is created
+here shows up in Cockpit and vice versa. Folder `/srv/samba/shares/<name>`, access
+`[{name, kind, level}]` (`level` `read` by default or `write`; `kind` looked up when
+omitted) with `access_mode` `replace`/`append`/`remove`, `comment`, `browseable`,
+`drive` `{letter, label}` (E–Z except H; `null` removes the mapping) through the
+**Cockpit - Mapped drives** GPO. A share always keeps at least one entry. Registry
+shares outside `/srv/samba/shares` (such as `home`) are never touched. `share_delete`
+keeps the folder unless `delete_data: true`.
+
+Passwords (`user_create`, `user_password`) reach `addcctl` on stdin and are never
+returned or logged.
 
 ```json
-{ "object": "share", "action": "list" }
-{ "object": "share", "action": "create", "args": { "name": "Materiali", "write": ["Teachers"], "read": ["Students"], "drive_letter": "M" } }
-{ "object": "share", "action": "grant", "args": { "name": "Materiali", "write": ["teacher-carol"] } }
-{ "object": "share", "action": "revoke", "args": { "name": "Materiali", "read": ["Students"] }, "preview": true }
-{ "object": "share", "action": "delete", "args": { "name": "Materiali", "delete_data": true }, "preview": true }
+user_create      { "name": "alice", "password": "...", "groups": ["Students"], "check": true }
+group_set        { "name": "staff", "members": ["alice", "bob"], "members_mode": "append" }
+home_provision   { "name": "alice" }
+home_delete      { "name": "alice", "delete_data": true, "check": true }
+share_set        { "name": "Materiali", "access": [{ "name": "Teachers", "level": "write" }, { "name": "Students" }], "drive": { "letter": "M" } }
+share_set        { "name": "Materiali", "access": [{ "name": "Students" }], "access_mode": "remove", "check": true }
+share_delete     { "name": "Materiali", "delete_data": true, "check": true }
 ```
+
+### samba_dc_build — build a DC
+
+`args`: role variables without the `samba_dc_build_` prefix, over the inventory's.
+It changes the system and may reboot it: `preview` first, then confirm.
+`force_provision: true` destroys the domain and needs `force_provision_confirm: true`.
 
 ### samba_dc_backup — backup and restore
 
@@ -418,11 +415,11 @@ Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, 
 
 ### Home provisioning for a new AD user
 ```json
-{ "object": "home", "action": "provision", "args": { "name": "alice" } }
+home_provision { "name": "alice" }
 ```
-Creates `/srv/samba/home/alice`, sets `homeDrive: H:` and `homeDirectory: \\DC\home\alice` in LDAP, and ensures the SMB share `home` exists.
+Creates `/srv/samba/home/alice`, sets `homeDrive: H:` and `homeDirectory: \\DC\home\alice` in the directory, and makes sure the SMB share `home` serves it.
 
 ### Removing a user's home directory (with confirmation)
 ```json
-{ "object": "home", "action": "absent", "args": { "name": "alice" }, "preview": true }
+home_delete { "name": "alice", "delete_data": true, "check": true }
 ```

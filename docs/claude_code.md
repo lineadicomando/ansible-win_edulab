@@ -24,10 +24,11 @@ The skills located in `.claude/skills/` are loaded by Claude Code when a user's 
 
 ## Available MCP Servers
 
-The three MCP servers that expose the project to Claude Code are:
+The MCP servers that expose the project to Claude Code are:
 
 - **win-edulab** — this project's server, in `mcp/`
 - **win-workman** — shipped with the `lineadicomando.win_workman` collection
-- **samba-dc** — shipped with the `lineadicomando.samba_dc` collection
+- **samba-dc** — shipped with the `lineadicomando.samba_dc` collection: builds and backs up the DC
+- **addcctl** — `addcctl mcp` on the domain controller, reached through SSH: users, groups, computers, home directories and shared folders
 
 For complete documentation on how to install, configure, and extend the MCP servers, refer to the [mcp.md](mcp.md) file.
