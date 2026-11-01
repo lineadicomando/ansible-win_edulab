@@ -1,0 +1,32 @@
+---
+# Build a Windows installation ISO for the lab PCs from a Microsoft ISO: a thin
+# wrapper of the win_iso role of win_workman, which does the work and documents
+# its variables (docs/roles/management/win_iso.md in the collection).
+#
+# Put the Microsoft ISO in win_workman_win_iso_root (by default the win_iso folder
+# of win_workman_storage_path); the output goes next to it as <name>-unattended.iso.
+#
+#   ansible-playbook playbooks/win_iso_build.yaml \
+#       -e win_workman_win_iso_source=Windows11_Client_x64_it-it_26300_9457.iso
+#
+#   # OpenSSH as the Windows capability, integrated by DISM on a Windows host
+#   ansible-playbook playbooks/win_iso_build.yaml -e win_iso_host=teacher -e win_workman_win_iso_ssh=dism \
+#       -e win_workman_win_iso_source=<iso> -e win_workman_win_iso_fod_source=<features iso>
+#
+# win_iso_host gives the credentials written into the ISO (ansible_user and
+# ansible_password of that host, so -i inventories/<lab>/hosts.yaml makes an ISO
+# for that lab) and, with ssh=dism, runs DISM. Without it the play runs on
+# localhost with the credentials of the group all. Through MCP:
+# run_tasks(l=<host>, t="win_iso-build" or "win_iso-build-dism", extra_vars={...}).
+
+- name: Build a Windows installation ISO
+  hosts: "{{ win_iso_host | default('localhost') }}"
+  gather_facts: false
+  vars:
+    win_workman_win_iso_organization: win_edulab
+  tasks:
+    - name: Run the win_iso role
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.win_iso
+      vars:
+        win_workman_action: "{{ win_iso_action | default('build') }}"

@@ -16,6 +16,7 @@ Playbooks that target a specific group accept the `-e target_hosts=<group|host>`
 | `shutdown.yaml` | `win_managed` |
 | `gcpw.yaml` | `win_managed` |
 | `seb_classroom.yaml` | `students` |
+| `win_iso_build.yaml` | `localhost`, or `win_iso_host` — builds a file on the controller |
 
 ---
 
@@ -159,3 +160,43 @@ ansible-playbook playbooks/seb_classroom.yaml
 # Override the Google Workspace domain for the account chooser
 ansible-playbook playbooks/seb_classroom.yaml -e win_workman_seb_account_chooser=school.edu
 ```
+
+### `win_iso_build.yaml` — Windows installation ISO ready for Ansible
+
+Wrapper of the `win_iso` role of win_workman (its doc,
+`docs/roles/management/win_iso.md` in the collection, covers every variable).
+From a Microsoft ISO put by hand in `/srv/ansible/storage/win_iso`, it builds an
+ISO that installs unattended, keeps only Home, Pro, Education and Pro Education,
+creates the local administrator of the inventory (`ansible_user`,
+`ansible_password` from the vault) and has OpenSSH Server answering from the
+first boot, with PowerShell as its shell and port 22 open. It also lifts the
+TPM, Secure Boot and RAM checks and turns off automatic BitLocker encryption.
+The output is `<name>-unattended.iso` next to the source.
+
+OpenSSH Server comes either from the Win32-OpenSSH MSI installed during Setup
+(`msi`, the default: only the controller is involved, but Windows Update does
+not update it) or as the Windows capability integrated by DISM on a Windows host
+(`dism`: needs the Languages and Optional Features ISO in the same folder and
+about 40 GB free on the host; Windows Update keeps it updated).
+
+```bash
+# MSI, credentials of the group all of the school inventory
+ansible-playbook playbooks/win_iso_build.yaml \
+  -e win_workman_win_iso_source=Windows11_Client_x64_it-it_26300_9457.iso
+# DISM on the teacher VM; credentials of teacher
+ansible-playbook playbooks/win_iso_build.yaml -e win_iso_host=teacher -e win_workman_win_iso_ssh=dism \
+  -e win_workman_win_iso_source=Windows11_Client_x64_it-it_26300_9457.iso \
+  -e win_workman_win_iso_fod_source=26100.1.240331-1435.ge_release_amd64fre_CLIENT_LOF_PACKAGES_OEM.iso
+# The editions of an ISO, without building anything
+ansible-playbook playbooks/win_iso_build.yaml -e win_iso_action=info -e win_workman_win_iso_source=<iso>
+```
+
+Through MCP the role runs as any win_workman task: `run_tasks(l=<host>,
+t=["win_iso-build"] or ["win_iso-build-dism"], extra_vars={...}, background=true)`;
+the host gives the credentials, so a host of another inventory makes the ISO of
+that lab, and with `msi` it may be off.
+
+`win_workman_win_iso_wipe_disk=true` erases disk 0 without asking: then a PC that
+boots from a forgotten stick reinstalls itself. Write the ISO to a stick with
+Rufus, leaving its customisations unticked, or copy it to a Ventoy stick. The ISO
+holds the account password in clear: keep it, and the sticks, safe.
