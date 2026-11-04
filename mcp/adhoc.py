@@ -165,7 +165,7 @@ def resolve_hosts(l: str, inventory: str = "school") -> list[str]:
     return sorted(selected)
 
 
-# "host01 | SUCCESS => {" opens a result; the minimal callback dumps it as JSON
+# "student01 | SUCCESS => {" opens a result; the minimal callback dumps it as JSON
 # indented by four, so the closing brace is the next line in column zero.
 _OPEN_RE = re.compile(r"^(?P<host>\S+) \| (?P<status>[A-Z_]+!?) => \{\s*$")
 _SKIPPED_RE = re.compile(r"^(?P<host>\S+) \| (?P<status>SKIPPED)\s*$")

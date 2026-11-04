@@ -18,12 +18,8 @@ description: Use when reading, writing, or debugging inventory files for this pr
 | Inventory | Description |
 |-----------|-------------|
 | `school`        | Default lab — local dev/test environment |
-| `lab_a`     | Informatics lab — site A |
-| `lab_b`     | Language lab — site A |
-| `lab_c`  | Informatics lab 1 — site B |
-| `lab_d`  | Informatics lab 2 — site B |
-| `lab_e`   | Language lab — site B |
-| `lab_f`   | Classroom PCs — site B. Flat `aule` group, no teachers/students split, per-host `ansible_user` |
+| `<site>_<lab>`  | Site inventories, one per lab (e.g. `siteA_info`, `siteA_ling`). Their names and layout are in `CLAUDE.local.md` |
+| `<site>_aule`   | Classroom PCs, not a lab: flat `aule` group, no teachers/students split, per-host `ansible_user` |
 
 Only `school` is tracked by git; `.gitignore` excludes `inventories/*` and re-includes it.
 The site inventories exist locally only.
@@ -97,7 +93,7 @@ win_managed:
     students:
 ```
 
-`lab_f` holds classroom PCs, not a lab: no roles, and `win_managed` lists directly
+A classroom inventory (`<site>_aule`) holds classroom PCs, not a lab: no roles, and `win_managed` lists directly
 the PCs that are ready for Ansible. A PC left out of it has no connection settings and is
 treated as a POSIX host. There is no `windows11` group any more: its variables moved to
 `group_vars/win_managed`. Add a version group only where a play really needs one.

@@ -2,11 +2,8 @@
 # Mirrors .gitignore: ansible-lint has no native gitignore support
 exclude_paths:
   - "**/vault.yaml"
-  - inventories/lab_a/
-  - inventories/lab_b/
-  - inventories/lab_c/
-  - inventories/lab_d/
-  - inventories/lab_e/
+  # Site inventories (<site>_<lab>, untracked); school has no underscore
+  - inventories/*_*/
   - ansible_collections/
   - temp/
   - local/

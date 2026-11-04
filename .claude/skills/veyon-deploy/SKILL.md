@@ -32,7 +32,7 @@ The project playbook is `playbooks/veyon.yaml` — `veyon` + `veyon-config` agai
 `win_managed`, overridable with `-e target_hosts=<group>`.
 
 ```json
-{ "playbook": "veyon", "inventory": "lab_a", "e": { "target_hosts": "teacher" } }
+{ "playbook": "veyon", "inventory": "<lab>", "e": { "target_hosts": "teacher" } }
 ```
 
 ---

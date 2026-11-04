@@ -166,7 +166,7 @@ def _point_latest_at(path: Path) -> None:
         pass
 
 
-# "TASK [role : name] ******" and "ok: [host01]" / "fatal: [host28]: UNREACHABLE!".
+# "TASK [role : name] ******" and "ok: [student01]" / "fatal: [teacher]: UNREACHABLE!".
 _TASK_RE = re.compile(r"^(?:TASK|HANDLER) \[(?P<name>.+?)\] \*+\s*$")
 _HOST_RE = re.compile(
     r"^(?P<status>ok|changed|failed|fatal|skipping|unreachable): \[(?P<host>[^ \]]+)"

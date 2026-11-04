@@ -487,8 +487,8 @@ of waiting for the tool call to return. The directory is gitignored.
 
 ```
 logs/
-├── 20260910-095603-veyon-lab_a.log
-├── 20260910-095603-veyon-lab_a.log.done
+├── 20260910-095603-veyon-lab_school.log
+├── 20260910-095603-veyon-lab_school.log.done
 ├── 20260910-100112-win_wm-chrome-teacher.log
 └── latest.log -> 20260910-100112-win_wm-chrome-teacher.log
 ```
@@ -504,7 +504,7 @@ tail -F logs/latest.log
 `latest.log` is repointed.
 
 File names are `<timestamp>-<label>.log`, where the label identifies the call
-(`veyon-lab_a`, `win_wm-chrome_info-teacher`, `samba-user-list-dc`). The first
+(`veyon-lab_school`, `win_wm-chrome_info-teacher`, `samba-user-list-dc`). The first
 line of each log is the exact command that ran, the last is its exit code. The path is
 also appended to the tool result as `[log] …`, so the agent can point you at it.
 

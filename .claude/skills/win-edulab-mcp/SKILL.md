@@ -54,7 +54,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 
 **Rule**: always use `preview=true` before destructive operations (`-off`, `shutdown`, `logoff`, `lock`) or operations that require extra variables.
 
-**Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (e.g. `lab_a`, `lab_b`, `lab_c`, `lab_d`, `lab_e`, `lab_f`) to both `get_inventory` and `run_tasks`/`run_playbook`.
+**Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (the site inventories are listed in `CLAUDE.local.md`; `get_inventory` errors list them too) to both `get_inventory` and `run_tasks`/`run_playbook`.
 
 ---
 
@@ -88,7 +88,7 @@ nothing else can usefully happen meanwhile. `run_status` reads a run *without* w
 **A whole lab runs five hosts at a time unless told otherwise.** `run_tasks`,
 `run_playbook` and `run_powershell` take `forks`, passed as `-f`: set it to the number of
 hosts when the run is long on each one (a Windows Update, a large install), e.g.
-`run_tasks(t=["wu-run"], inventory="lab_d", forks=29, background=true)`. Omitted,
+`run_tasks(t=["wu-run"], inventory="<lab>", forks=29, background=true)`. Omitted,
 Ansible's configured value applies, 5 by default.
 
 
@@ -105,7 +105,7 @@ secrets.
 
 | Situation | Tool |
 |-----------|------|
-| "Is the Veyon service running on host07?" | `run_powershell` |
+| "Is the Veyon service running on student01?" | `run_powershell` |
 | "Why did the Chrome install fail here?" | `run_powershell` |
 | Anything the catalog already covers | `run_tasks` |
 | A sequence worth repeating, or one needing idempotency | a playbook in `local/`, or a new role |
@@ -152,7 +152,7 @@ Other `$Ansible` members: `Changed`, `Failed`, `Tmpdir`, `Diff`.
 ```
 
 ```json
-{ "script": "Restart-Service -Name VeyonService", "l": "host07", "read_only": false }
+{ "script": "Restart-Service -Name VeyonService", "l": "student01", "read_only": false }
 ```
 
 Hosts that answer alike are folded into one entry, so a whole lab reads as a few lines
@@ -343,12 +343,12 @@ Restore args: `restore_backup_file`, `restore_targetdir`, `restore_newservername
 
 ### Install software on all students
 ```json
-{ "t": ["chrome", "vscode", "git"], "l": "students", "inventory": "lab_a", "preview": true }
+{ "t": ["chrome", "vscode", "git"], "l": "students", "inventory": "<lab>", "preview": true }
 ```
 
 ### Remove browsers from a specific host
 ```json
-{ "t": ["firefox-off", "chrome-off"], "l": "host01", "inventory": "lab_a", "preview": true }
+{ "t": ["firefox-off", "chrome-off"], "l": "student01", "inventory": "<lab>", "preview": true }
 ```
 
 ### Per-user install (deferred to logon) for a group, minus one user
@@ -379,7 +379,7 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 
 ### Pause Windows Update for a specific number of days
 ```json
-{ "t": ["wu-pause-84"], "l": "students", "inventory": "lab_a", "preview": true }
+{ "t": ["wu-pause-84"], "l": "students", "inventory": "<lab>", "preview": true }
 ```
 
 ### Read the current max pause cap
@@ -394,7 +394,7 @@ Then `zed-usr-apply` for users already logged on, `zed-usr-info` to see who has 
 
 ### Routine lab maintenance
 ```json
-{ "playbook": "maintenance", "inventory": "lab_a", "background": true }
+{ "playbook": "maintenance", "inventory": "<lab>", "background": true }
 ```
 `run_playbook` has no `preview`: this call runs. Confirm with the user first.
 
@@ -402,8 +402,8 @@ Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, 
 
 ### See what Windows Update offers, then install an optional feature update
 ```json
-{ "t": ["wu-scan"], "l": "win_managed", "inventory": "lab_a" }
-{ "t": ["wu-run-optional-upgrades", "wu-run"], "l": "win_managed", "inventory": "lab_a", "preview": true }
+{ "t": ["wu-scan"], "l": "win_managed", "inventory": "<lab>" }
+{ "t": ["wu-run-optional-upgrades", "wu-run"], "l": "win_managed", "inventory": "<lab>", "preview": true }
 ```
 `wu-run-upgrades` finds nothing when the feature update is offered as optional (26H2 on 25H2 hosts): `wu-scan` lists it under "Optional", and `wu-run-optional-<category>` installs it. The `wu-run` after it brings the cumulative of the new release.
 

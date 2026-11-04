@@ -116,7 +116,7 @@ Files in `tests/` chain multiple plays with `import_playbook`:
 
 ```bash
 ansible-playbook playbooks/win_wm.yaml \
-  -i inventories/lab_a/hosts.yaml \
+  -i inventories/<lab>/hosts.yaml \
   -l students \
   -e "t=chrome"
 ```
