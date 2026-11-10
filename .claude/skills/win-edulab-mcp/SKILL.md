@@ -411,7 +411,7 @@ Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, 
 ```json
 { "t": ["wu-pause-3-w"], "l": "students", "preview": true }
 ```
-`wu-pause-<n>-<u>`: valid units `d` (days), `w` (weeks), `m` (months). `wu-pause-3-w` = 21 days.
+`wu-pause-<n>-<u>`: valid units `d` (days), `w` (weeks), `m` (calendar months, end date computed on the host: `wu-pause-1-m` on 10 Nov ends on 10 Dec). `wu-pause-3-w` = 21 days. A pause longer than `FlightSettingsMaxPauseDays` (default 35) is shortened to it: raise it first with `wu-max_pause_days-<n>[-m]`, where a month counts as 31 days.
 
 ### Home provisioning for a new AD user
 ```json

@@ -164,7 +164,7 @@ today: `zed`). A usr-only schema refuses `on`/`off`/`info`/…; a sys-only one r
 | `scan` | Read-only: list the updates offered, regular and optional; sets `win_workman_wu_scan` fact |
 | `on` | Resume Windows Update (alias for `resume`) |
 | `off` | Pause Windows Update at max duration (alias for `pause` at max) |
-| `pause` | Pause updates for `win_workman_wu_pause_days` days (default 7) |
+| `pause` | Pause updates for `win_workman_wu_pause_months` months plus `win_workman_wu_pause_days` days (default 0 + 7), or `pause-<n>[-d\|-w\|-m]` (`m` = calendar months) |
 | `resume` | Resume paused updates |
 | `max_pause_days` | Read or set `FlightSettingsMaxPauseDays`; without args reports current value, with a duration sets the cap |
 | `is_paused` | Check if updates are paused; sets `win_workman_wu_is_paused` fact |
