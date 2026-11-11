@@ -215,7 +215,9 @@ expects and the Debian installer does not leave behind:
 It then reboots once to prove the VM comes back with its address, shuts it down
 and takes the `baseline` snapshot. The domain is provisioned by
 `tests/samba_dc_build.yaml` or `tests/samba_dc.yaml`, which start from that
-snapshot.
+snapshot and need the `lineadicomando.samba_dc` collection of cockpit-samba-dc:
+`ansible-galaxy collection install -r tests/requirements.yaml -p .` (see
+[`tests/README.md`](../tests/README.md#the-test-domain-controller)).
 
 ### From another project
 

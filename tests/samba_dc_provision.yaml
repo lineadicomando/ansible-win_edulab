@@ -1,0 +1,11 @@
+---
+# Provisions the Samba AD DC of the test VMs with the samba_dc_build role of
+# lineadicomando.samba_dc (tests/requirements.yaml). Variables: samba_dc_build_*
+# in group_vars/samba_dc, derived from win_workman_domain_*. Imported by
+# samba_dc.yaml and samba_dc_build.yaml, which revert and wake the DC first.
+- name: Build Samba AD DC
+  hosts: "{{ target_hosts | default('samba_dc') }}"
+  become: true
+  gather_facts: true
+  roles:
+    - role: lineadicomando.samba_dc.samba_dc_build

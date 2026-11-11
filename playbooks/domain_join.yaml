@@ -1,0 +1,13 @@
+---
+# Joins the managed Windows PCs to the Active Directory domain through the domain
+# role of lineadicomando.win_workman, which first points their DNS at the domain
+# controllers (the domain SRV records are only served there). Any AD DC will do.
+# Variables: win_workman_domain_* in group_vars/all.
+- name: Join Windows hosts to the AD domain
+  hosts: "{{ target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win') }}"  # override: -e target_hosts=<group>
+  gather_facts: false
+  roles:
+    - role: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks:
+          - "domain-join"

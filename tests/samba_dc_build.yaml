@@ -1,4 +1,8 @@
 ---
+# Rebuilds the Samba AD DC alone, from its baseline.
+# Needs lineadicomando.samba_dc: ansible-galaxy collection install -r tests/requirements.yaml -p .
+#
+#   ansible-playbook tests/samba_dc_build.yaml
 - name: Revert to baseline
   ansible.builtin.import_playbook: virsh.yaml
   vars:
@@ -12,4 +16,4 @@
     target_hosts: dc01
 
 - name: Build Samba AD DC
-  ansible.builtin.import_playbook: ../playbooks/samba_dc_build.yaml
+  ansible.builtin.import_playbook: samba_dc_provision.yaml

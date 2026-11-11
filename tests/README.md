@@ -14,7 +14,10 @@ tests/
   vm_build_dc.yaml     # Utility: build the Debian VM of the DC from scratch, preseeded, up to its baseline
   vm_build/            # Answer file, first-logon script and preseed templates of the two above
   revert_baseline.yaml # Utility: revert to baseline + wake for arbitrary target (var t)
+  requirements.yaml    # Collections needed by the domain tests only (lineadicomando.samba_dc)
   samba_dc.yaml        # Samba AD DC build, test users, domain join of win_managed, shared folders
+  samba_dc_build.yaml  # Samba AD DC alone, from its baseline
+  samba_dc_provision.yaml # The samba_dc_build role on the DC (imported by the two above)
   samba_dc_users.yaml  # Domain test users and groups (imported by samba_dc.yaml)
   usr_zed.yaml         # Per-user deferred install (usr action) with domain users, on zed
   samba_share.yaml     # Shared folders: SMB access per user, drive mapping at logon, revoke, delete (imported by samba_dc.yaml)
@@ -56,6 +59,25 @@ and sudo, before `samba_dc_build` runs.
 
 > **Note:** the user running `virsh.yaml` needs access to `qemu:///system` (the
 > `libvirt` group), not sudo.
+
+## The test domain controller
+
+win_edulab works with any AD domain and does not build one. The domain of the test
+VMs is a Samba AD DC built by the `lineadicomando.samba_dc` collection of
+cockpit-samba-dc, which the project's `requirements.yaml` does not install. The
+domain tests (`samba_dc*.yaml`, `samba_share.yaml`, `usr_zed.yaml`) need it:
+
+```bash
+ansible-galaxy collection install -r tests/requirements.yaml -p .
+```
+
+Without it they stop before running anything, with
+`the role 'lineadicomando.samba_dc.samba_dc_build' was not found`.
+
+The domain is described by `win_workman_domain_*` in `group_vars/all`, as on a real
+site; the DC's own `samba_dc_build_*` variables are in `group_vars/samba_dc` and
+follow from them. `test_domain_netbios` (`group_vars/all/test_vms.yaml`) is the
+NetBIOS name, used by the tests on the PCs as the `DOMAIN\user` prefix.
 
 ## Domain test users
 

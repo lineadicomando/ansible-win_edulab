@@ -1,7 +1,0 @@
----
-- name: Build Samba AD DC
-  hosts: "{{ target_hosts | default('samba_dc') }}"
-  become: true
-  gather_facts: true
-  roles:
-    - role: lineadicomando.samba_dc.samba_dc_build

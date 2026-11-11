@@ -1,0 +1,10 @@
+---
+# Collections needed by the domain tests only (samba_dc*.yaml, samba_share.yaml,
+# usr_zed.yaml): they build the Samba AD DC of the test VMs. win_edulab itself
+# works with any AD domain and does not need them.
+#   ansible-galaxy collection install -r tests/requirements.yaml -p .
+collections:
+  # In the ansible/ directory of cockpit-samba-dc since v0.8.0
+  - name: git+https://github.com/lineadicomando/cockpit-samba-dc.git#/ansible/
+    type: git
+    version: v0.9.0

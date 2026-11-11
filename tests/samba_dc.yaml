@@ -1,4 +1,9 @@
 ---
+# Domain test environment: baseline revert of the DC and win_managed, Samba AD DC
+# build, test users, domain join of win_managed, shared folders.
+# Needs lineadicomando.samba_dc: ansible-galaxy collection install -r tests/requirements.yaml -p .
+#
+#   ansible-playbook tests/samba_dc.yaml
 - name: Revert to baseline
   ansible.builtin.import_playbook: virsh.yaml
   vars:
@@ -14,13 +19,13 @@
     target_hosts: dc01:win_managed
 
 - name: Build Samba AD DC
-  ansible.builtin.import_playbook: ../playbooks/samba_dc_build.yaml
+  ansible.builtin.import_playbook: samba_dc_provision.yaml
 
 - name: Create domain test users
   ansible.builtin.import_playbook: samba_dc_users.yaml
 
-- name: Join Samba AD DC
-  ansible.builtin.import_playbook: ../playbooks/samba_dc_join.yaml
+- name: Join the AD domain
+  ansible.builtin.import_playbook: ../playbooks/domain_join.yaml
 
 - name: Shared folders
   ansible.builtin.import_playbook: samba_share.yaml
