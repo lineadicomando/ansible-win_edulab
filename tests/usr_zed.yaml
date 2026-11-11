@@ -21,7 +21,7 @@
   hosts: "{{ vm_host | default('teacher') }}"
   gather_facts: false
   vars:
-    usr_test_domain: "{{ samba_dc_build_domain }}"
+    usr_test_domain: "{{ test_domain_netbios }}"
     usr_test_user: student-alice
     usr_test_excluded: student-bob
     usr_test_group: Students

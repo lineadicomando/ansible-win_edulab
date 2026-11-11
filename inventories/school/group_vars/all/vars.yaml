@@ -33,33 +33,16 @@ win_workman_storage_path: /srv/ansible/storage
 win_workman_veyon_keypairs_dir: "{{ win_workman_storage_path }}/veyon/edulab"
 win_workman_restart_timeout: 600
 
-# Samba Active Directory Domain Controller — samba_dc_build role
-samba_dc_build_realm: SCHOOL.INTERNAL
-samba_dc_build_domain: SCHOOL
-samba_dc_build_fqdn: dc.school.internal
-samba_dc_build_search_domain: school.internal
-# Upstream resolver, not the DC itself: apt needs it before Samba answers DNS,
-# and samba-tool provision takes it from resolv.conf as the dns forwarder.
-samba_dc_build_nameserver: 192.168.122.1
-samba_dc_build_address: "{{ hostvars['dc01'].ansible_host }}"
-samba_dc_build_netmask: 255.255.255.0
-samba_dc_build_gateway: 192.168.122.1
-samba_dc_build_ifname: enp1s0
-samba_dc_build_ntp_server: 192.168.122.1
-samba_dc_build_ntp_allow_network: 192.168.122.0/24
-# samba_dc_build_administrator_passwd is defined in vault.yaml: the domain
-# administrator credential is deliberately kept separate from the SSH one.
-samba_dc_build_administrator_username: admin
-
-# domain role of win_workman (playbooks/samba_dc_join.yaml) — variabili
-# condivise con samba_dc_build
-win_workman_domain_name: "{{ samba_dc_build_search_domain }}"
-win_workman_domain_admin_user: "{{ samba_dc_build_administrator_username }}"
-win_workman_domain_admin_password: "{{ samba_dc_build_administrator_passwd }}"
+# Active Directory domain the managed PCs join (playbooks/domain_join.yaml,
+# domain role of win_workman). Any AD DC will do: Samba, Windows Server, an
+# existing school domain. win_workman_domain_admin_password is in vault.yaml.
+# In this inventory the DC is the test VM dc01, built by tests/ (group_vars/samba_dc).
+win_workman_domain_name: school.internal
+win_workman_domain_admin_user: admin
 # DNS servers set on the clients before joining: the domain SRV records are
 # only served by the DC, not by the libvirt resolver handed out to the VMs.
 win_workman_domain_dns_servers:
-  - "{{ samba_dc_build_address }}"
+  - "{{ hostvars['dc01'].ansible_host }}"
 
 # Browsers shortcuts
 win_workman_browser_shortcut_url: https://lineadicomando.it

@@ -1,4 +1,5 @@
 ansible_vault_password: "Edulab01"
 ansible_vault_become_password: "Edulab01"
-# At least 7 characters and AD complexity rules: samba-tool refuses anything less.
-samba_dc_build_administrator_passwd: "Edulab01"
+# Domain account that joins the PCs. For the test DC it is also the administrator
+# password given to samba-tool: at least 7 characters and AD complexity rules.
+win_workman_domain_admin_password: "Edulab01"

@@ -17,8 +17,12 @@ test_vm_win_ui_language: it-IT
 test_vm_win_input_locale: "0410:00000410"
 test_vm_win_timezone: W. Europe Standard Time
 
+# NetBIOS name of the test domain: samba_dc_build_domain on the DC
+# (group_vars/samba_dc), and the DOMAIN\user prefix in the tests on the PCs.
+test_domain_netbios: SCHOOL
+
 # Debian guest of the Samba DC: a plain netinst install with SSH, sudo and the
-# static address; samba_dc_build does the rest.
+# static address; samba_dc_build (tests/samba_dc_provision.yaml) does the rest.
 test_vm_dc_memory_mib: 2048
 test_vm_dc_vcpus: 2
 test_vm_dc_disk_gib: 20

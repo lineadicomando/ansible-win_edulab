@@ -76,7 +76,7 @@
   hosts: "{{ vm_host | default('teacher') }}"
   gather_facts: false
   vars:
-    share_test_domain: "{{ samba_dc_build_domain }}"
+    share_test_domain: "{{ test_domain_netbios }}"
     share_test_dc: "{{ groups['samba_dc'] | first }}"
     share_test_name: "{{ hostvars[share_test_dc].share_test_name }}"
     share_test_unc: "\\\\{{ hostvars[share_test_dc].share_test_netbios.stdout | trim }}\\{{ share_test_name }}"
@@ -212,7 +212,7 @@
   hosts: "{{ vm_host | default('teacher') }}"
   gather_facts: false
   vars:
-    share_test_domain: "{{ samba_dc_build_domain }}"
+    share_test_domain: "{{ test_domain_netbios }}"
     share_test_dc: "{{ groups['samba_dc'] | first }}"
   tasks:
     - name: Access as student-alice after the revoke

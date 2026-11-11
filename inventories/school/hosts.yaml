@@ -52,9 +52,9 @@ all:
       children:
         lab_cad:
         lab_coding:
-    # samba_dc is a convention required by the lineadicomando.samba_dc collection.
-    # The samba.yaml and samba_dc_backup.yaml playbooks default to this group so that
-    # AD management commands are never accidentally broadcast to non-DC hosts.
+    # Test fixture: the Samba AD DC built by tests/ with lineadicomando.samba_dc
+    # (tests/requirements.yaml), whose playbooks default to this group.
+    # win_edulab itself only needs win_workman_domain_* (group_vars/all).
     samba_dc:
       hosts:
         dc01:

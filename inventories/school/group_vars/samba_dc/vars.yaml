@@ -1,0 +1,20 @@
+# Test fixture: the Samba AD DC of the test VMs, built by the samba_dc_build role
+# of lineadicomando.samba_dc (installed from tests/requirements.yaml). win_edulab
+# itself does not depend on it: the domain is described by win_workman_domain_*
+# in group_vars/all, and these variables follow from them.
+samba_dc_build_search_domain: "{{ win_workman_domain_name }}"
+samba_dc_build_realm: "{{ win_workman_domain_name | upper }}"
+samba_dc_build_domain: "{{ test_domain_netbios }}"
+samba_dc_build_fqdn: "dc.{{ win_workman_domain_name }}"
+# Upstream resolver, not the DC itself: apt needs it before Samba answers DNS,
+# and samba-tool provision takes it from resolv.conf as the dns forwarder.
+samba_dc_build_nameserver: 192.168.122.1
+samba_dc_build_address: "{{ ansible_host }}"
+samba_dc_build_netmask: 255.255.255.0
+samba_dc_build_gateway: 192.168.122.1
+samba_dc_build_ifname: enp1s0
+samba_dc_build_ntp_server: 192.168.122.1
+samba_dc_build_ntp_allow_network: 192.168.122.0/24
+# The domain administrator credential is deliberately kept separate from the SSH one.
+samba_dc_build_administrator_username: "{{ win_workman_domain_admin_user }}"
+samba_dc_build_administrator_passwd: "{{ win_workman_domain_admin_password }}"
