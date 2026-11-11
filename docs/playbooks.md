@@ -4,8 +4,7 @@ Playbooks that target a specific group accept the `-e target_hosts=<group|host>`
 
 | Playbook | Default target |
 |---|---|
-| `samba_dc_build.yaml` | `samba_dc` |
-| `samba_dc_join.yaml` | `win_managed` |
+| `domain_join.yaml` | `win_managed` |
 | `win_wm.yaml` | `all` — always pass `-l` |
 | `lab_cad.yaml` | `lab_cad` |
 | `lab_coding.yaml` | `lab_coding` |
@@ -20,25 +19,16 @@ Playbooks that target a specific group accept the `-e target_hosts=<group|host>`
 
 ---
 
-### `samba_dc_build.yaml` — Provision the Samba AD DC
+### `domain_join.yaml` — Join Windows hosts to the domain
 
-Builds a full Samba 4 Active Directory Domain Controller on a Debian host:
-network configuration, firewall (nftables), Kerberos, NTP (chrony), Cockpit.
-The role is idempotent: reruns skip the `samba-tool domain provision` step.
-
-```bash
-ansible-playbook playbooks/samba_dc_build.yaml
-```
-
-### `samba_dc_join.yaml` — Join Windows hosts to the domain
-
-Joins Windows 11 workstations to the Samba AD domain, through the `domain`
-role of `lineadicomando.win_workman` (task `domain-join`): it points the
-clients' DNS at the DC, then joins. Variables: `win_workman_domain_*` in
-`group_vars/all`.
+Joins Windows 11 workstations to an Active Directory domain, through the
+`domain` role of `lineadicomando.win_workman` (task `domain-join`): it points
+the clients' DNS at the domain controllers, then joins. Any AD DC will do
+(Samba, Windows Server, an existing school domain): this project does not
+build or manage it. Variables: `win_workman_domain_*` in `group_vars/all`.
 
 ```bash
-ansible-playbook playbooks/samba_dc_join.yaml
+ansible-playbook playbooks/domain_join.yaml
 ```
 
 ### `win_wm.yaml` — Windows software and system management

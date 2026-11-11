@@ -1,6 +1,6 @@
 # Architecture and Project Structure
 
-The **ansible-win_edulab** project manages a didactic computer lab consisting of a Domain Controller on Debian and Windows 11 workstations.
+The **ansible-win_edulab** project manages a didactic computer lab consisting of Windows 11 workstations, optionally joined to an Active Directory domain served by a DC this project does not manage.
 
 Everything runs from a **Linux control node** — Ansible, the MCP servers, and the
 QEMU/KVM test VMs that the playbooks in `tests/` revert and start through
@@ -10,14 +10,16 @@ the test environment unavailable; see
 
 ## Architecture
 
-The automation is based on Ansible and two dedicated collections:
+The automation is based on Ansible and one dedicated collection:
 
 ```
 ansible-win_edulab                       ← this project (inventory + playbooks + MCP server)
     requires ↓
     lineadicomando.win_workman           ← Windows software & system management (+ MCP server)
-    lineadicomando.samba_dc           ← Samba 4 AD DC provisioning on Debian (+ MCP server);
-                                        day-two management through addcctl mcp on the DC
+
+tests/ only (tests/requirements.yaml) ↓
+    lineadicomando.samba_dc              ← builds the Samba 4 AD DC of the test VMs
+                                           (cockpit-samba-dc)
 ```
 
 ## Project Structure

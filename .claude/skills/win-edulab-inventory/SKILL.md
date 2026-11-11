@@ -58,7 +58,7 @@ all:
     lab_cad:          # vertical: the PCs of the CAD lab, listed directly
     lab_coding:       # vertical: the PCs of the coding lab, listed directly
     win_managed:      # transversal: every managed Windows PC, built from other groups
-    samba_dc:         # the DC again (dc01): required by lineadicomando.samba_dc
+    samba_dc:         # school only: the test DC again (dc01), for tests/samba_dc*.yaml
 ```
 
 Three kinds of group, each answering a different question:

@@ -342,7 +342,7 @@ Variables in `vault.yaml`:
 |---|---|
 | `ansible_vault_password` | SSH password for the `maint` user |
 | `ansible_vault_become_password` | sudo password (usually the same as the SSH password) |
-| `samba_dc_build_administrator_passwd` | Domain administrator password (must meet AD complexity requirements: minimum 7 characters) |
+| `win_workman_domain_admin_password` | Password of the domain account that joins the PCs (only if they join an AD domain) |
 
 ### 4. Install Ansible collections
 
@@ -361,9 +361,8 @@ all:
   children:
     servers:
       hosts:
-        dc01:
+        dc01:                            # the AD domain controller, if any
           ansible_host: <DC-IP>
-          ansible_mac: <DC-MAC>
     teachers:
       hosts:
         teacher:
@@ -385,35 +384,31 @@ all:
       children:      # and holder of the SSH/PowerShell connection settings
         lab_cad:
         lab_coding:
-    samba_dc:        # the domain controller: default target of the Samba
-      hosts:         # playbooks and MCP tools, which match nothing without it
-        dc01:
 ```
 
-Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `win_managed` is built from the labs. `samba_dc` names the domain controller again: the `lineadicomando.samba_dc` collection requires that group, so its commands never reach another host. An inventory that holds a single lab can build `win_managed` from `teachers` and `students` instead. The group was called `lab_win` in earlier versions: playbooks and MCP tools still fall back to that name when an inventory has no `win_managed`.
+Each host is declared once, with its address, under `servers`, `teachers` or `students`. The lab groups name the PCs that belong to each lab, and `win_managed` is built from the labs. An inventory that holds a single lab can build `win_managed` from `teachers` and `students` instead. The group was called `lab_win` in earlier versions: playbooks and MCP tools still fall back to that name when an inventory has no `win_managed`.
 
 Also, edit `inventories/school/group_vars/all/vars.yaml` to define the SSH key path and collection-level settings.
 
 > **Security Note:** The default configuration in `ansible_ssh_common_args` disables host key verification to ease use in an isolated lab network. The same file indicates the strict alternative for non-isolated environments.
 
-### 6. Configure Samba DC parameters (Optional)
+### 6. Active Directory domain (Optional)
 
-If you plan to install a Samba Domain Controller, edit the `samba_dc_build_*` variables in `inventories/school/group_vars/all/vars.yaml`:
+If the PCs join an Active Directory domain, describe it with the variables of the
+`domain` role of win_workman in `inventories/school/group_vars/all/vars.yaml`; the
+password goes in `vault.yaml`. Any AD DC will do (Samba, Windows Server, an existing
+school domain): this project does not build or manage it.
 
 ```yaml
-samba_dc_build_realm: SCHOOL.INTERNAL        # Kerberos realm (uppercase)
-samba_dc_build_domain: SCHOOL                # NetBIOS domain name
-samba_dc_build_fqdn: dc.school.internal
-samba_dc_build_search_domain: school.internal
-samba_dc_build_nameserver: 127.0.0.1         # DC is its own DNS server
-samba_dc_build_address: 192.168.122.2        # Static IP of the DC
-samba_dc_build_netmask: 255.255.255.0
-samba_dc_build_gateway: 192.168.122.1
-samba_dc_build_ifname: enp1s0                # Network interface name
-samba_dc_build_ntp_server: 192.168.122.1     # Upstream NTP server
-samba_dc_build_ntp_allow_network: 192.168.122.0/24
-samba_dc_build_administrator_username: admin
+win_workman_domain_name: school.internal      # DNS name of the domain
+win_workman_domain_admin_user: admin          # account that joins the PCs
+win_workman_domain_dns_servers:               # the DCs: set on the PCs before joining
+  - <DC-IP>
 ```
+
+Then join the PCs with `ansible-playbook playbooks/domain_join.yaml`. To build a
+Samba AD DC on Debian, see [cockpit-samba-dc](https://github.com/lineadicomando/cockpit-samba-dc);
+the test VMs use it (`tests/requirements.yaml`, see [Test VMs](test-vms.md)).
 
 ---
 

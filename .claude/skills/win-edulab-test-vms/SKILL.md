@@ -98,7 +98,9 @@ ansible-playbook tests/vm_build_dc.yaml > logs/vm_build_dc01.log 2>&1   # ~10 mi
 - Then moves the static stanza to `/etc/network/interfaces.d/<iface>` (the file
   `samba_dc_build` writes) and sets `/etc/resolv.conf`, reboots once to prove the
   address survives, shuts down and takes `baseline`. The domain is *not* provisioned:
-  `tests/samba_dc_build.yaml` / `tests/samba_dc.yaml` do that from this baseline.
+  `tests/samba_dc_build.yaml` / `tests/samba_dc.yaml` do that from this baseline, with
+  `lineadicomando.samba_dc` installed from `tests/requirements.yaml`. Its
+  `samba_dc_build_*` vars are in `group_vars/samba_dc`, derived from `win_workman_domain_*`.
 - If the installer stops on a question, take a screenshot: the preseed lacks an
   answer for it. The Debian console is text; `vmgui.py dc01 shot` reads it.
 - The guest agent is on: `virsh qemu-agent-command <domain> '{"execute":"guest-exec",...}'`

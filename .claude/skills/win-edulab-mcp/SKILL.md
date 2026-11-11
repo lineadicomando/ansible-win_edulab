@@ -25,22 +25,6 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 | `run_tasks` | Install/remove software, run operations on hosts/groups via the `lineadicomando.win_workman.win_workman` FQCN playbook |
 | `run_status`, `wait_run` | Same as on the win-edulab server, for runs started by `run_tasks` |
 
-### samba-dc server
-
-| Tool | When to use |
-|------|-------------|
-| `samba_dc_build` | Build (or bring back the configuration of) the Samba AD DC |
-| `samba_dc_backup` | DC backup and restore |
-
-### addcctl server (on the DC)
-
-| Tool | When to use |
-|------|-------------|
-| `user_*`, `group_*`, `computer_*` | Domain accounts: list, get, create, change, delete |
-| `home_provision`, `home_delete` | Users' home directories (H:) |
-| `share_*` | Shared folders and their drive mapping |
-| `domain_password_policy` | The password and lockout settings |
-
 ---
 
 ## Standard workflow
@@ -138,7 +122,7 @@ Other `$Ansible` members: `Changed`, `Failed`, `Tmpdir`, `Diff`.
 - `error_action` defaults to `stop`: an error record fails the task instead of
   passing unnoticed.
 - `l` is **required** and has no default. More than 3 hosts needs `confirm=true`.
-- Windows hosts only; the Linux DC is the job of the samba-dc and addcctl servers.
+- Windows hosts only; the domain controller is outside this project.
 
 ### Examples
 
@@ -215,9 +199,6 @@ of the command line and are masked in the log, in the output and in a preview:
   "sensitive_vars": { "win_workman_autologon_password": "..." } }
 ```
 
-The samba-dc tools do the same on their own for `args.administrator_passwd` and
-`args.domain_password`; the addcctl tools never put a password on a command line.
-
 **run_playbook** — for standalone playbooks with their own logic:
 
 | Playbook | Default target | Accepts `target_hosts` | Use |
@@ -228,8 +209,7 @@ The samba-dc tools do the same on their own for `args.administrator_passwd` and
 | `lab_cad` | `lab_cad` | yes | CAD lab software setup |
 | `lab_coding` | `lab_coding` | yes | Coding lab software setup |
 | `maintenance` | `win_managed` | yes | System maintenance: wol (skipped on hosts with no `ansible_mac`) → lock → restart-if-pending → chkdsk → wim-scan → sfc → optimize, then unlock → restart even on failure (no Windows Update) |
-| `samba_dc_join` | `win_managed` | yes | Join Windows hosts to the Samba AD domain |
-| `samba_dc_build` | `samba_dc` | yes | Build a new Samba AD Domain Controller |
+| `domain_join` | `win_managed` | yes | Join Windows hosts to the AD domain (`win_workman_domain_*`) |
 | `gcpw` | `win_managed` | yes | Google Credential Provider for Windows |
 | `shutdown` | `win_managed` | yes | Shut the lab down |
 
@@ -252,90 +232,16 @@ Discovered via `get_inventory`; groups common to most inventories:
 - `students` — student PCs
 - `win_managed` — all managed Windows PCs, in labs or not (built from the lab groups, or from teachers + students); carries the connection settings
 - `servers` — Linux servers (dc01 etc.)
-- `samba_dc` — domain controller(s); **required by the samba_dc collection** — all inventories that use the samba tools must define this group
+- `samba_dc` — `school` only: the Samba DC of the test VMs, a test fixture (`tests/requirements.yaml`)
 
 ---
 
-## Samba AD DC operations
+## The domain controller
 
-Two servers: **samba-dc** (`samba_dc_build`, `samba_dc_backup`: playbooks, target
-`samba_dc` by default) and **addcctl** (`addcctl mcp` on the DC, through SSH: users,
-groups, computers, home directories, shared folders). There is no `samba` tool any
-more (collection v0.9.0); OUs have no tool yet.
-
-### Standard workflow (addcctl)
-```
-1. user_list / group_list / share_list   → look before changing
-2. <tool> with "check": true             → what it would change, nothing changed
-3. <tool>                                → execute, after the user confirms
-```
-
-**Rule**: always `"check": true` first for destructive calls (`user_delete`,
-`group_delete`, `computer_delete`, `home_delete`, `share_delete`, a `share_set` or
-`group_set` that removes entries) and confirm with the user.
-
-### addcctl — tools
-
-| Object | Tools |
-|--------|-------|
-| user | `user_list`, `user_get`, `user_create`, `user_set`, `user_password`, `user_unlock`, `user_delete` |
-| group | `group_list`, `group_get`, `group_create`, `group_set`, `group_delete` |
-| computer | `computer_list`, `computer_get`, `computer_create`, `computer_delete` |
-| home | `home_provision`, `home_delete` |
-| share | `share_list`, `share_get`, `share_set`, `share_delete`, `share_rename_principal` |
-| domain | `domain_password_policy` |
-
-The input of each tool is in its schema (the MCP client shows it): names are
-sAMAccountNames; `user_set` and `group_set` change only what they are given and take
-`groups`/`members` with a `*_mode` of `replace` (default), `append` or `remove`;
-`new_name` renames the account and its entries in the shared folders.
-
-**home_provision** creates `/srv/samba/home/<user>`, sets `homeDrive` (default `H:`)
-and `homeDirectory`, and makes sure the hidden `home` share serves it.
-`home_delete` clears the attributes; with `delete_data: true` it also removes the
-folder (destructive).
-
-**share_set** is the **Shared folders** tab of cockpit-samba-dc: whatever is created
-here shows up in Cockpit and vice versa. Folder `/srv/samba/shares/<name>`, access
-`[{name, kind, level}]` (`level` `read` by default or `write`; `kind` looked up when
-omitted) with `access_mode` `replace`/`append`/`remove`, `comment`, `browseable`,
-`drive` `{letter, label}` (E–Z except H; `null` removes the mapping) through the
-**Cockpit - Mapped drives** GPO. A share always keeps at least one entry. Registry
-shares outside `/srv/samba/shares` (such as `home`) are never touched. `share_delete`
-keeps the folder unless `delete_data: true`.
-
-Passwords (`user_create`, `user_password`) reach `addcctl` on stdin and are never
-returned or logged.
-
-```json
-user_create      { "name": "alice", "password": "...", "groups": ["Students"], "check": true }
-group_set        { "name": "staff", "members": ["alice", "bob"], "members_mode": "append" }
-home_provision   { "name": "alice" }
-home_delete      { "name": "alice", "delete_data": true, "check": true }
-share_set        { "name": "Materiali", "access": [{ "name": "Teachers", "level": "write" }, { "name": "Students" }], "drive": { "letter": "M" } }
-share_set        { "name": "Materiali", "access": [{ "name": "Students" }], "access_mode": "remove", "check": true }
-share_delete     { "name": "Materiali", "delete_data": true, "check": true }
-```
-
-### samba_dc_build — build a DC
-
-`args`: role variables without the `samba_dc_build_` prefix, over the inventory's.
-It changes the system and may reboot it: `preview` first, then confirm.
-`force_provision: true` destroys the domain and needs `force_provision_confirm: true`.
-
-### samba_dc_backup — backup and restore
-
-Backup args: `targetdir` (required), `domain` (bool, default true), `domain_type` (`online`|`offline`, default `offline`), `files` (bool, default true), `files_paths` (list, default `[/home, /srv/samba]`).
-
-Restore args: `restore_backup_file`, `restore_targetdir`, `restore_newservername`, `restore_confirm=true` (all required).
-
-```json
-{ "action": "backup", "args": { "targetdir": "/var/backups/samba" } }
-{ "action": "backup", "args": { "targetdir": "/var/backups/samba", "files_paths": ["/home", "/srv/samba"] } }
-{ "action": "restore", "args": { "restore_backup_file": "/var/backups/samba/samba-backup.tar.gz",
-    "restore_targetdir": "/var/lib/samba", "restore_newservername": "dc1",
-    "restore_confirm": true }, "preview": true }
-```
+Outside this project: win_edulab joins the PCs to any AD domain and never manages the
+DC. The Samba DC of the test VMs (`dc01`) is built by `tests/samba_dc*.yaml` with
+cockpit-samba-dc's collection; its own MCP servers (`samba-dc`, `addcctl`), when
+configured, document their tools in their schemas and in cockpit-samba-dc's README.
 
 ---
 
@@ -412,14 +318,3 @@ Runs in sequence: wol, lock (which logs users off), restart-if-pending, chkdsk, 
 { "t": ["wu-pause-3-w"], "l": "students", "preview": true }
 ```
 `wu-pause-<n>-<u>`: valid units `d` (days), `w` (weeks), `m` (calendar months, end date computed on the host: `wu-pause-1-m` on 10 Nov ends on 10 Dec). `wu-pause-3-w` = 21 days. A pause longer than `FlightSettingsMaxPauseDays` (default 35) is shortened to it: raise it first with `wu-max_pause_days-<n>[-m]`, where a month counts as 31 days.
-
-### Home provisioning for a new AD user
-```json
-home_provision { "name": "alice" }
-```
-Creates `/srv/samba/home/alice`, sets `homeDrive: H:` and `homeDirectory: \\DC\home\alice` in the directory, and makes sure the SMB share `home` serves it.
-
-### Removing a user's home directory (with confirmation)
-```json
-home_delete { "name": "alice", "delete_data": true, "check": true }
-```

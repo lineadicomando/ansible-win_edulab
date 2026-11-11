@@ -28,7 +28,9 @@ The MCP servers that expose the project to Claude Code are:
 
 - **win-edulab** — this project's server, in `mcp/`
 - **win-workman** — shipped with the `lineadicomando.win_workman` collection
-- **samba-dc** — shipped with the `lineadicomando.samba_dc` collection: builds and backs up the DC
-- **addcctl** — `addcctl mcp` on the domain controller, reached through SSH: users, groups, computers, home directories and shared folders
+
+The domain controller is outside this project. The Samba DC of the test VMs comes
+from cockpit-samba-dc, whose own MCP servers (`samba-dc`, `addcctl`) can be added
+next to these: see its README.
 
 For complete documentation on how to install, configure, and extend the MCP servers, refer to the [mcp.md](mcp.md) file.

@@ -65,8 +65,7 @@ Via MCP use `run_tasks` instead of calling the playbook directly — see the **w
 | `playbooks/shutdown.yaml` | `win_managed` | Shut the lab down |
 | `playbooks/lab_cad.yaml` | `lab_cad` | CAD lab setup |
 | `playbooks/lab_coding.yaml` | `lab_coding` | Coding lab setup |
-| `playbooks/samba_dc_build.yaml` | `samba_dc` | Build a Samba AD Domain Controller |
-| `playbooks/samba_dc_join.yaml` | `win_managed` | Join Windows hosts to the Samba AD domain |
+| `playbooks/domain_join.yaml` | `win_managed` | Join Windows hosts to the AD domain (`win_workman_domain_*`; any AD DC) |
 
 > **Note on autologon**: prefer `run_tasks(["autologon"])` with `e` vars for full control. `autologon.yaml` is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `win_managed`.
 

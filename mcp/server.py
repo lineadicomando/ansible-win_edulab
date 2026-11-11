@@ -133,7 +133,7 @@ def _get_tools() -> list[Tool]:
                 "- Pass values through 'parameters' into a param() block rather than building "
                 "them into the script text, and secrets through 'sensitive_parameters'; the "
                 "script text itself is written to the run log.\n"
-                "- Windows hosts only. The Linux DC is served by the samba-dc MCP server."
+                "- Windows hosts only. The domain controller is outside this project."
             ),
             inputSchema={
                 "type": "object",
