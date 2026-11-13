@@ -79,20 +79,24 @@ def _ssh_key_problems(root: Path) -> list[str]:
 
 
 def _ssh_identities(path: Path) -> list[str]:
-    """The -i paths in a vars file's ansible_ssh_common_args, if any."""
+    """The private keys a vars file gives ssh: ansible_ssh_private_key_file and
+    the -i paths in ansible_ssh_common_args, if any."""
     try:
         data = yaml.safe_load(path.read_text()) or {}
     except (OSError, yaml.YAMLError):
         return []
     if not isinstance(data, dict):
         return []
+    keys: list[str] = []
+    key_file = data.get("ansible_ssh_private_key_file")
+    if isinstance(key_file, str):
+        keys.append(_resolve(key_file, data))
     args = data.get("ansible_ssh_common_args")
-    if not isinstance(args, str):
-        return []
-    args = _resolve(args, data)
+    if isinstance(args, str):
+        keys += re.findall(r"-i\s+(\S+)", _resolve(args, data))
     # A path still holding a reference comes from somewhere this check cannot
     # see (the vault, host_vars, the command line): leave it to Ansible.
-    return [path for path in re.findall(r"-i\s+(\S+)", args) if "{{" not in path]
+    return [key for key in keys if "{{" not in key]
 
 
 def _resolve(value: str, data: dict) -> str:

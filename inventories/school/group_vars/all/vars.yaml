@@ -6,6 +6,9 @@ ansible_domain: "school.internal"
 # Lab network. ansible_broadcast is where wol sends its magic packets.
 ansible_subnet: 192.168.122.0/24
 ansible_broadcast: 192.168.122.255
+# Private key for the connection, public key for the roles that authorize it on
+# the hosts (secure_ssh, win_iso): never the same file.
+ansible_ssh_private_key_file: ~/.ssh/id_ed25519
 ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub
 # SECURITY NOTE: StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null disable host
 # key verification, making connections vulnerable to MITM attacks. Acceptable only in
@@ -17,13 +20,11 @@ ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub
 #
 # Production equivalent (strict host verification, persistent known_hosts, quiet output):
 #   ansible_ssh_common_args: >-
-#     -i {{ ansible_ssh_pub_key_path }}
 #     -o StrictHostKeyChecking=yes
 #     -o UserKnownHostsFile=~/.ssh/known_hosts
 #     -o UpdateHostKeys=yes
 #     -o LogLevel=ERROR
 ansible_ssh_common_args: >-
-  -i {{ ansible_ssh_pub_key_path }}
   -o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null
   -o UpdateHostKeys=no
