@@ -49,7 +49,7 @@
       ansible.builtin.include_role:
         name: lineadicomando.win_workman.dispatcher
       vars:
-        win_workman_tasks: [secure_ssh]
+        win_workman_tasks: [openssh-harden]
 
     # Before the host gets its notice: a legal notice holds autologon at the
     # logon screen until someone confirms it

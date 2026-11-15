@@ -27,7 +27,7 @@
     - role: lineadicomando.win_workman.dispatcher
       vars:
         win_workman_tasks:
-          - secure_ssh
+          - openssh-harden
 
 - name: Lifecycle test - redpanda_cpp
   hosts: "{{ vm_host | default('teacher') }}"

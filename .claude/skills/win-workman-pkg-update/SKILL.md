@@ -131,7 +131,7 @@ grep -oE 'Installer: `[^`]+`' docs/roles/catalog/<role>.md
 ### 6. Test on a VM
 
 A bump is not done until the pkg lifecycle passes from a clean snapshot. Follow
-`win-workman-pkg-test`: revert to `baseline`, `wol`, `secure_ssh`, then
+`win-workman-pkg-test`: revert to `baseline`, `wol`, `openssh-harden`, then
 `info → download → copy → on → on → info → is_present → off → is_present → info`.
 
 `download` succeeding *is* the checksum check — `get_url` fails on a mismatch, so a green

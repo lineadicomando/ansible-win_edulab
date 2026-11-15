@@ -218,7 +218,7 @@ Roles are read dynamically from `ansible_collections/lineadicomando/win_workman/
 at server startup, so the list reflects whatever version of the collection is installed.
 Typical roles include: `chrome`, `firefox`, `edge`, `brave`, `libreoffice`, `gimp`,
 `inkscape`, `vscode`, `python310`–`python314`, `zoom`, `vlc`, `veyon`, `p7zip`,
-`chkdsk`, `sfc`, `wim`, `wu`, `restart`, `shutdown`, `wol`, `secure_ssh`, …
+`chkdsk`, `sfc`, `wim`, `wu`, `restart`, `shutdown`, `wol`, `openssh`, …
 
 #### The `preview` flag
 

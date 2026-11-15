@@ -119,7 +119,7 @@ ansible-playbook tests/virsh.yaml -e '{"vm":["win_managed"],"cmd":"start"}'
   that starts from `baseline`.
 - A shut-off `baseline` leaves the VM off after the revert; tests then wake it with
   `playbooks/wol.yaml` (needs the `virsh_wakeonlan` listener, see `docs/test-vms.md`).
-- After a revert `secure_ssh` must run again before key-based SSH works.
+- After a revert `openssh-harden` must run again before key-based SSH works.
 
 ## Snapshots
 

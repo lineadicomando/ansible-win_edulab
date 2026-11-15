@@ -113,12 +113,12 @@ ansible_password: "{{ ansible_vault_password }}"
 ansible_become_password: "{{ ansible_vault_become_password }}"
 ansible_domain: "<domain>"
 ansible_ssh_private_key_file: ~/.ssh/id_ed25519      # used by ssh -i
-ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub      # written to the hosts by secure_ssh and win_iso
+ansible_ssh_pub_key_path: ~/.ssh/id_ed25519.pub      # written to the hosts by openssh and win_iso
 ansible_ssh_common_args: "-o StrictHostKeyChecking=no ..."
 ```
 
 Keep the two key variables apart: `ansible_ssh_pub_key_path` is copied into
-`administrators_authorized_keys` on the hosts (role `secure_ssh`) and into the
+`administrators_authorized_keys` on the hosts (role `openssh`) and into the
 installation ISO (role `win_iso`). Pointing it at the private key, or passing the
 key with `-i` in `ansible_ssh_common_args`, puts the private key on every PC.
 

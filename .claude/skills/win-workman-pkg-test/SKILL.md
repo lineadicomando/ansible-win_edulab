@@ -45,7 +45,7 @@ Run once after each snapshot revert to set up key-based SSH so subsequent plays 
 prompt for credentials:
 
 ```bash
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"secure_ssh"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"openssh-harden"}'
 ```
 
 ### SSH access for manual verification
@@ -142,7 +142,7 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
 > runs on `hosts: all` and only a command-line `-l` narrows it: `hosts:` or
 > `target_hosts:` passed as import vars are ignored, and `t: wol` wakes every VM
 > in the inventory (DC and both students included). Wake through
-> `../playbooks/wol.yaml`, which honours `target_hosts`, and run `secure_ssh`
+> `../playbooks/wol.yaml`, which honours `target_hosts`, and run `openssh-harden`
 > inside the test play. Check with `ansible-playbook <test> --list-hosts`.
 
 ```yaml
@@ -166,7 +166,7 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
     - role: lineadicomando.win_workman.dispatcher
       vars:
         win_workman_tasks:
-          - secure_ssh
+          - openssh-harden
           - <schema>-info
           - <schema>-download
           - <schema>-copy
@@ -235,4 +235,4 @@ restart → agent log `end exit=0` → `usr-info` → `usr-off` + `usr-apply` �
   `redpanda_cpp` role carries that pattern.
 - **`download` re-downloads every run** — `checksum` field in the schema is missing or wrong.
 - **`copy` fails** — `win_workman_remote_tmp` dir does not exist or WinRM/SSH not accessible;
-  run `secure_ssh` task first and confirm connectivity with `ssh maint@<ip>`.
+  run `openssh-harden` task first and confirm connectivity with `ssh maint@<ip>`.
