@@ -16,6 +16,11 @@ test_vm_win_disk_gib: 128
 test_vm_win_ui_language: it-IT
 test_vm_win_input_locale: "0410:00000410"
 test_vm_win_timezone: W. Europe Standard Time
+# OpenSSH Server comes from the Windows capability. A host that sets test_vm_openssh_msi
+# gets the Win32-OpenSSH MSI instead, as win_iso installs it with ssh=msi:
+#   test_vm_openssh_msi:
+#     url: https://github.com/PowerShell/Win32-OpenSSH/releases/download/<tag>/OpenSSH-Win64-<v>.msi
+#     sha256: <hex>
 
 # NetBIOS name of the test domain: samba_dc_build_domain on the DC
 # (group_vars/samba_dc), and the DOMAIN\user prefix in the tests on the PCs.

@@ -1,6 +1,6 @@
 # First logon of the unattended build of {{ inventory_hostname }} (tests/vm_build_windows.yaml).
 # Makes the VM reachable the way docs/installation.md prepares a lab PC: OpenSSH Server
-# with PowerShell as its shell, port 22 open. Then turns off sleep and hibernation and
+# (the capability, or the MSI of test_vm_openssh_msi) with PowerShell as its shell, port 22 open. Then turns off sleep and hibernation and
 # moves the NIC to the static address of the inventory, the last step because it drops
 # the DHCP lease the capability download needs.
 # Log: C:\Windows\Temp\edulab-setup.log; outcome: edulab-setup.done or edulab-setup.failed.
@@ -8,6 +8,27 @@ $ErrorActionPreference = 'Stop'
 $log = 'C:\Windows\Temp\edulab-setup'
 Start-Transcript -Path "$log.log" -Append
 try {
+{% if test_vm_openssh_msi is defined %}
+    # OpenSSH Server from the Win32-OpenSSH MSI (test_vm_openssh_msi), as win_iso
+    # installs it with ssh=msi, instead of the Windows capability. The NIC may still be
+    # coming up at first logon: retry the download for about ten minutes.
+    $msi = "$env:SystemRoot\Temp\{{ test_vm_openssh_msi.url | basename }}"
+    for ($i = 1; $i -le 20; $i++) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri '{{ test_vm_openssh_msi.url }}' -OutFile $msi
+            break
+        } catch {
+            Write-Output "Download of the OpenSSH MSI, attempt ${i}: $($_.Exception.Message)"
+            Start-Sleep -Seconds 30
+        }
+    }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $msi).Hash -ne '{{ test_vm_openssh_msi.sha256 | upper }}') {
+        throw "$msi does not match the sha256 of test_vm_openssh_msi"
+    }
+    $p = Start-Process msiexec.exe -Wait -PassThru `
+        -ArgumentList "/i `"$msi`" /qn /norestart /l*v `"$log-openssh-msi.log`""
+    if ($p.ExitCode -ne 0) { throw "msiexec exited with $($p.ExitCode)" }
+{% else %}
     # The NIC may still be coming up at first logon, and the capability comes from
     # Windows Update: retry for about ten minutes.
     $cap = 'OpenSSH.Server~~~~0.0.1.0'
@@ -23,6 +44,7 @@ try {
     if ((Get-WindowsCapability -Online -Name $cap).State -ne 'Installed') {
         throw "$cap is not installed"
     }
+{% endif %}
     Set-Service -Name sshd -StartupType Automatic
     Start-Service -Name sshd
     New-Item -Path HKLM:\SOFTWARE\OpenSSH -Force | Out-Null
@@ -33,6 +55,15 @@ try {
             -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow | Out-Null
     }
     Set-NetFirewallRule -Name OpenSSH-Server-In-TCP -Enabled True -Profile Any
+
+    # The remote temporary directory of Ansible, with the ACL the dispatcher of
+    # win_workman sets (pkg_utils/remote_tmp.yaml): Ansible would otherwise create it
+    # readable by ansible_user alone, and SYSTEM could not use it.
+{% if ansible_remote_tmp is defined and ansible_remote_tmp is match('^[A-Za-z]:\\\\') %}
+    New-Item -Path '{{ ansible_remote_tmp }}' -ItemType Directory -Force | Out-Null
+    icacls.exe '{{ ansible_remote_tmp }}' /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "icacls exit code $LASTEXITCODE on {{ ansible_remote_tmp }}" }
+{% endif %}
 
     # A test VM that falls asleep looks unreachable; hibernation also keeps fast
     # startup on, which leaves the disk of a shut-off baseline in a hibernated state.
