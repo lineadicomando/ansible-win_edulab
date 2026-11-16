@@ -1,0 +1,127 @@
+---
+# Smoke test of a deployment playbook: from the baseline snapshot, the playbook
+# runs as it would on a lab, and what it installed is then checked on the hosts.
+#
+#   ansible-playbook tests/deploy.yaml -e pb=veyon
+#   ansible-playbook tests/deploy.yaml -e pb=lab_coding -e test_hosts=teacher
+#
+# pb is the playbook under test, without its extension (default veyon):
+#   veyon          Veyon installed and configured, VeyonService running
+#   seb_classroom  Safe Exam Browser installed, its client settings deployed
+#   lab_coding     every package of the coding lab installed
+#   lab_cad        every package of the CAD lab installed: AutoCAD LT and
+#                  SketchUp take several GB and a long time, run it on purpose
+# test_hosts is an inventory host, group or pattern (default win_managed); it is
+# passed to the playbook as target_hosts.
+#
+# The packages to look for are read from the playbook itself: every task string
+# of its step that is a bare role name (chrome, veyon) must pass <role>-is_present
+# afterwards. A playbook added to deploy_test_playbooks needs nothing else,
+# unless it deploys more than packages.
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Check the playbook under test
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    deploy_test_playbooks: [veyon, seb_classroom, lab_coding, lab_cad]
+  tasks:
+    - name: Assert pb names a deployment playbook
+      ansible.builtin.assert:
+        that: (pb | default('veyon')) in deploy_test_playbooks
+        fail_msg: "pb must be one of {{ deploy_test_playbooks | join(', ') }}"
+
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: "{{ test_hosts | default('win_managed') }}"
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake hosts
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ test_hosts | default('win_managed') }}"
+
+- name: Authorize SSH key access
+  hosts: "{{ test_hosts | default('win_managed') }}"
+  gather_facts: false
+  tasks:
+    - name: Authorize SSH
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [openssh-harden]
+
+# The values a site would set in its inventory, which the example one leaves empty
+- name: Run the playbook under test
+  ansible.builtin.import_playbook: "../playbooks/{{ pb | default('veyon') }}.yaml"
+  vars:
+    target_hosts: "{{ test_hosts | default('win_managed') }}"
+    win_workman_seb_account_chooser: example.edu
+
+- name: Check what the playbook deployed
+  hosts: "{{ test_hosts | default('win_managed') }}"
+  gather_facts: false
+  vars:
+    deploy_test_pb: "{{ pb | default('veyon') }}"
+    deploy_test_step: >-
+      {{
+        (lookup('ansible.builtin.file', playbook_dir ~ '/../playbooks/' ~ deploy_test_pb ~ '.yaml')
+         | from_yaml)[0].tasks[0].vars.wf_step_tasks
+      }}
+    deploy_test_packages: "{{ deploy_test_step | reject('search', '-') | list }}"
+  tasks:
+    - name: Assert the playbook installs at least one package
+      ansible.builtin.assert:
+        that: deploy_test_packages | length > 0
+        fail_msg: "No package among the tasks of {{ deploy_test_pb }}: {{ deploy_test_step }}"
+
+    # is_present fails the host on the first package that is missing
+    - name: Assert every package is installed
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: "{{ deploy_test_packages | map('regex_replace', '$', '-is_present') | list }}"
+
+    - name: Check Veyon
+      when: deploy_test_pb == 'veyon'
+      block:
+        - name: Read the Veyon service and the authentication keys
+          ansible.windows.win_powershell:
+            # veyon-cli writes Qt warnings to stderr, which must not fail the task
+            error_action: continue
+            script: |
+              $Ansible.Changed = $false
+              $service = Get-Service -Name VeyonService -ErrorAction SilentlyContinue
+              $Ansible.Result = @{
+                service = if ($service) { $service.Status.ToString() } else { 'missing' }
+                master  = Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'Veyon\veyon-master.exe')
+                # Not "keys": a result read as .keys in Jinja is the method of the dict
+                authkeys = @(& (Join-Path $env:ProgramFiles 'Veyon\veyon-cli.exe') authkeys list 2>&1 |
+                  ForEach-Object { "$_".Trim() } | Where-Object { $_ -match '^\S+/(public|private)$' })
+              }
+          register: deploy_test_veyon
+
+        - name: Assert the service runs, with keys, and the Master only where it belongs
+          ansible.builtin.assert:
+            that:
+              - deploy_test_veyon.result.service == 'Running'
+              - deploy_test_veyon.result.authkeys | length > 0
+              - deploy_test_veyon.result.master == (win_workman_veyon_master | default(false) | bool)
+            fail_msg: "Veyon: {{ deploy_test_veyon.result }}"
+
+    - name: Check Safe Exam Browser
+      when: deploy_test_pb == 'seb_classroom'
+      block:
+        - name: Look for the client settings
+          ansible.windows.win_stat:
+            path: C:\ProgramData\SafeExamBrowser\SebClientSettings.seb
+          register: deploy_test_seb
+
+        - name: Assert the client settings were deployed
+          ansible.builtin.assert:
+            that:
+              - deploy_test_seb.stat.exists
+              - deploy_test_seb.stat.size > 0
