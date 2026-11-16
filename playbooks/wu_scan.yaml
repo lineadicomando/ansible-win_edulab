@@ -1,0 +1,22 @@
+---
+# Read-only: lists what Windows Update offers each host, both what wu_run.yaml
+# can install and what is offered as optional (preview cumulatives, optional
+# feature updates such as 26H2 on 25H2, drivers), which only wu_optional.yaml
+# reaches.
+#
+# Workflow: before wu_run.yaml, to see what it will find; wf_report.yaml prints
+# a line per host.
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+#            wf_wu_scan, {host: {build, pending, optional}}
+- name: Windows Update scan
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  tasks:
+    - name: Scan for updates
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: wu-scan
+        wf_step_tasks:
+          - wu-scan
+        wf_step_publish:
+          wf_wu_scan: win_workman_wu_scan

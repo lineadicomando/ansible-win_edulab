@@ -1,0 +1,33 @@
+---
+# Installs the updates Windows Update offers as optional, which wu_run.yaml does
+# not see: the feature update to the next release (26H2 on a 25H2 host), the
+# monthly preview cumulative, optional drivers. Stops after them: chain
+# wu_run.yaml for the cumulative of the new release.
+#
+# Workflow: wu_scan.yaml -> maint_lock.yaml -> wu_optional.yaml -> wu_run.yaml
+# Survey: wu_categories (choice; default upgrades): upgrades (feature update),
+#           updates (preview cumulative), drivers, or several joined by +
+#         win_workman_wu_optional_timeout (int, 7200) seconds per install round
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+#            wf_wu_report, as wu_run.yaml
+- name: Windows Update, optional updates
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  vars:
+    wu_categories: upgrades
+  tasks:
+    - name: Check wu_categories
+      ansible.builtin.assert:
+        that: wu_categories | string is match('^[a-z]+(\+[a-z]+)*$')
+        fail_msg: "wu_categories must be one or more categories joined by +, not '{{ wu_categories }}'"
+        quiet: true
+      run_once: true
+
+    - name: Install the optional updates
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: wu-run-optional
+        wf_step_tasks:
+          - "wu-run-optional-{{ wu_categories }}"
+        wf_step_publish:
+          wf_wu_report: win_workman_wu_report

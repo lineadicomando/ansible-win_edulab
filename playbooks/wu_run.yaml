@@ -1,0 +1,40 @@
+---
+# Installs Windows updates, restarting as many times as they need (up to
+# win_workman_wu_max_rounds install rounds), then reports the build before and
+# after and the outcome of each update. A host where an update fails to install
+# fails.
+#
+# Workflow: after maint_lock.yaml, so that nobody is logged on during the
+# restarts; after wu_optional.yaml, for the cumulative of the new release.
+# Survey: wu_profile (choice; default security): security (security, critical,
+#           rollups, Defender definitions), full (all but feature updates),
+#           upgrades (feature updates only), or cat-<a>+<b> for explicit
+#           categories, e.g. cat-security+drivers
+#         win_workman_wu_unpause (bool, false) resume updates before the run,
+#           when they are kept paused between runs (wu_pause.yaml)
+#         win_workman_wu_max_rounds (int, 5), win_workman_wu_reboot_timeout (int, 1800)
+#         win_workman_restart (bool, true) restart when an update asks for it
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+#            wf_wu_report, {host: {build_before, build_after, found, installed,
+#            failed, reboot_required, updates, ...}}, also for the hosts that failed
+- name: Windows Update
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  vars:
+    wu_profile: security
+  tasks:
+    - name: Check wu_profile
+      ansible.builtin.assert:
+        that: wu_profile | string is match('^(security|full|upgrades|cat-[a-z]+(\+[a-z]+)*)$')
+        fail_msg: "wu_profile must be security, full, upgrades or cat-<a>+<b>, not '{{ wu_profile }}'"
+        quiet: true
+      run_once: true
+
+    - name: Install the updates
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: wu-run
+        wf_step_tasks:
+          - "wu-run-{{ wu_profile }}"
+        wf_step_publish:
+          wf_wu_report: win_workman_wu_report

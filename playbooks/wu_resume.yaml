@@ -1,0 +1,14 @@
+---
+# Resumes Windows Update, clearing the pause set by wu_pause.yaml.
+#
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Windows Update resume
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  tasks:
+    - name: Resume Windows Update
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: wu-resume
+        wf_step_tasks:
+          - wu-resume
