@@ -18,6 +18,26 @@
 # for that lab) and, with ssh=dism, runs DISM. Without it the play runs on
 # localhost with the credentials of the group all. Through MCP:
 # run_tasks(l=<host>, t="win_iso-build" or "win_iso-build-dism", extra_vars={...}).
+#
+# With cockpit-fleet (fleet_store defined) the store takes the place of the
+# storage: the Microsoft ISO is uploaded to win_iso/ in the store, the output is
+# written there, downloaded, and removed from the store when no longer needed.
+# The build tree, which holds the password in clear, goes in the scratch folder
+# of the run, which fleet removes when the run ends, so that a run killed half-way
+# leaves nothing in the store. The template:
+#   - no limit (localhost is not in the inventory), or a limit naming
+#     win_iso_host;
+#   - the vault credential of the inventory: the ISO carries ansible_password;
+#   - win_workman_win_iso_authorized_key_file pointing to a public key in the
+#     store, e.g. "{{ fleet_store }}/win_iso/id_ed25519.pub": the run cannot read
+#     ~/.ssh, and without the file the key is left out of the ISO.
+# The fleet host needs 7z, genisoimage and wimlib-imagex, and free space for about
+# three times the ISO (source, build tree, output). The ISO holds the password in
+# clear: whoever can download it from the store can read it.
+#
+# Survey: win_workman_win_iso_source (text, required), win_iso_host (text),
+#         win_workman_win_iso_ssh (choice msi|dism|none),
+#         win_workman_win_iso_fod_source (text, with dism)
 
 - name: Build a Windows installation ISO
   hosts: "{{ win_iso_host | default('localhost') }}"
@@ -25,6 +45,26 @@
   vars:
     win_workman_win_iso_organization: win_edulab
   tasks:
+    # set_fact wins over the inventory, extra vars and surveys win over it.
+    - name: Use the store and the scratch folder of the cockpit-fleet run
+      ansible.builtin.set_fact:
+        win_workman_storage_path: "{{ fleet_store }}"
+        win_workman_win_iso_work_dir: >-
+          {{ win_workman_win_iso_work_dir | default('', true) or (fleet_store | dirname) ~ '/scratch' }}
+      when: fleet_store is defined
+
+    - name: Warn that the ISO will have no SSH key
+      ansible.builtin.debug:
+        msg: >-
+          {{ _key | default('(not set)', true) }} is not a file on the controller: the ISO
+          will authorise no public key, only the password. Set
+          win_workman_win_iso_authorized_key_file to a public key{{ ' in the store' if fleet_store is defined else '' }}.
+      vars:
+        _key: "{{ win_workman_win_iso_authorized_key_file | default(ansible_ssh_pub_key_path | default('')) }}"
+      when:
+        - win_iso_action | default('build') == 'build'
+        - not (_key | length > 0 and _key | expanduser is file)
+
     - name: Run the win_iso role
       ansible.builtin.include_role:
         name: lineadicomando.win_workman.win_iso

@@ -98,7 +98,7 @@ to a rescue): it is recorded in `wf_failed` and the step fails with exit code
 | `gcpw.yaml` | `gcpw` | |
 | `autologon.yaml` | `autologon` | `win_workman_autologon_restart` |
 | `seb_classroom.yaml` | `seb`, `seb-deploy` (default group `students`) | `win_workman_seb_account_chooser` |
-| `win_iso_build.yaml` | `win_iso` role, on `localhost` or `win_iso_host` | |
+| `win_iso_build.yaml` | `win_iso` role, on `localhost` or `win_iso_host` | not a step: a template of its own, no limit |
 
 `wu-reset` has no playbook on purpose: the role keeps it for a host stuck by
 hand, through `run_tasks`.
@@ -295,3 +295,28 @@ that lab, and with `msi` it may be off.
 boots from a forgotten stick reinstalls itself. Write the ISO to a stick with
 Rufus, leaving its customisations unticked, or copy it to a Ventoy stick. The ISO
 holds the account password in clear: keep it, and the sticks, safe.
+
+**With cockpit-fleet.** The playbook is not a workflow step but runs as a
+template of its own. When `fleet_store` is defined, the store takes the place of
+the storage: upload the Microsoft ISO to `win_iso/` in the store, run the
+template, download `win_iso/<name>-unattended.iso`, then remove it from the store.
+The build tree, which holds the password in clear, goes in the run's `scratch/`
+folder (`win_workman_win_iso_work_dir`), which fleet removes when the run ends,
+so a run that is canceled or killed leaves nothing in the store. The OpenSSH MSI
+is downloaded into the root of the store on each run that does not find it there.
+The template needs:
+
+- no limit, since `localhost` is not in the inventory and a limit leaves it out,
+  or a limit naming `win_iso_host`;
+- the vault credential of the inventory, because the ISO carries `ansible_password`;
+- `win_workman_win_iso_authorized_key_file` set to a public key uploaded to the
+  store, e.g. `{{ fleet_store }}/win_iso/id_ed25519.pub`. The run cannot read
+  `~/.ssh`, and without the key the ISO only authorises the password (the play
+  warns about it);
+- survey: `win_workman_win_iso_source` (text), and optionally `win_iso_host`
+  (text), `win_workman_win_iso_ssh` (choice `msi`/`dism`/`none`) and
+  `win_workman_win_iso_fod_source`.
+
+The fleet host needs `7z`, `genisoimage` and `wimlib-imagex`, and room for about
+three times the ISO. Whoever can download from the store can read the password
+in the ISO: keep the store to the staff who manage the machines.
