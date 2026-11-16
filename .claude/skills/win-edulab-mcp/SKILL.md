@@ -12,7 +12,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 | Tool | When to use |
 |------|-------------|
 | `get_inventory` | Before any operation: discover hosts, groups, IP and MAC addresses |
-| `run_playbook` | Standalone playbooks (veyon, seb_classroom, wol) |
+| `run_playbook` | Playbooks of `playbooks/` (veyon, wol, maint_*, wu_*, …) |
 | `run_powershell` | One-off PowerShell on Windows hosts: diagnosis, inspection, a fix with no role behind it |
 | `run_status` | Read a run started with `background=true` without waiting for it |
 | `wait_run` | Block until a background run ends and return its output — only when the next step depends on the result (see **Long runs**) |
@@ -212,6 +212,13 @@ of the command line and are masked in the log, in the output and in a preview:
 | `domain_join` | `win_managed` | yes | Join Windows hosts to the AD domain (`win_workman_domain_*`) |
 | `gcpw` | `win_managed` | yes | Google Credential Provider for Windows |
 | `shutdown` | `win_managed` | yes | Shut the lab down |
+| `maint_*`, `wu_*`, `sysinfo`, `software`, `wf_report` | `win_managed` (`wf_report`: localhost) | yes | One step each, meant for cockpit-fleet workflows; catalogue in `docs/playbooks.md` |
+
+Every playbook of `playbooks/` sets aside the hosts that do not answer within
+`wf_connect_timeout` (30 s) and fails them at the end; with `wf_tolerant: true` it
+succeeds anyway and only reports them. Through MCP `run_tasks` is usually the shorter
+way to the same task: the step playbooks matter when a check on an answer
+(`wu_profile`, `wu_pause_for`) or the gate is wanted.
 
 Pass `target_hosts` via the `e` parameter to override the default group:
 
@@ -221,7 +228,7 @@ Pass `target_hosts` via the `e` parameter to override the default group:
 { "playbook": "wol", "e": { "target_hosts": "lab_cad" } }
 ```
 
-> **Note on autologon**: use `run_tasks(["autologon-on"])` to enable autologon with role defaults. The `autologon.yaml` standalone playbook is a fixed shortcut that hardcodes `win_workman_autologon_restart: true` and targets `win_managed` — prefer `run_tasks` unless that exact behaviour is needed.
+> **Note on autologon**: use `run_tasks(["autologon-on"])` to enable autologon with role defaults. The `autologon.yaml` playbook restarts by default (`win_workman_autologon_restart: true`, overridable in `e`).
 
 ---
 
