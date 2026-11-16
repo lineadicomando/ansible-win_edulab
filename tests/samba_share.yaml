@@ -5,9 +5,12 @@
 #   ansible-playbook tests/samba_share.yaml
 #   ansible-playbook tests/samba_share.yaml -e vm_host=student01
 #
+# It reverts nothing: build the environment first with tests/samba_dc.yaml, or
+# run it on what another domain test left.
+#
 # Uses the domain test users (tests/samba_dc_users.yaml): teacher-carol in
-# Teachers, student-alice in Students. Imported by samba_dc.yaml; alice never
-# logs on and gets no profile here, because usr_zed.yaml needs her first
+# Teachers, student-alice in Students. alice never logs on and gets no profile
+# here, so the host is still good for usr_zed.yaml, which needs her first
 # logon. Then:
 #   1. create: Teachers read-write, Students read-only, mapped as a drive;
 #      a second run changes nothing

@@ -1,22 +1,28 @@
 ---
-# Domain test environment: baseline revert of the DC and win_managed, Samba AD DC
-# build, test users, domain join of win_managed, shared folders.
+# Domain test environment, the fixture of the domain tests: baseline revert of
+# the DC and of the Windows hosts, Samba AD DC build, test users, domain join.
+# It asserts nothing of its own; usr_zed.yaml imports it, samba_share.yaml runs
+# on what it leaves.
 # Needs lineadicomando.samba_dc: ansible-galaxy collection install -r tests/requirements.yaml -p .
 #
 #   ansible-playbook tests/samba_dc.yaml
+#   ansible-playbook tests/samba_dc.yaml -e domain_hosts=teacher
+#
+# domain_hosts is the Windows hosts to revert and join (default win_managed):
+# name one when the workstation has no memory for the DC and every Windows VM.
 - name: Revert to baseline
   ansible.builtin.import_playbook: virsh.yaml
   vars:
     vm:
       - dc01
-      - win_managed
+      - "{{ domain_hosts | default('win_managed') }}"
     cmd: snapshot-revert
     snapshot: baseline
 
 - name: Wake hosts
   ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
-    target_hosts: dc01:win_managed
+    target_hosts: "dc01:{{ domain_hosts | default('win_managed') }}"
 
 - name: Build Samba AD DC
   ansible.builtin.import_playbook: samba_dc_provision.yaml
@@ -26,6 +32,5 @@
 
 - name: Join the AD domain
   ansible.builtin.import_playbook: ../playbooks/domain_join.yaml
-
-- name: Shared folders
-  ansible.builtin.import_playbook: samba_share.yaml
+  vars:
+    target_hosts: "{{ domain_hosts | default('win_managed') }}"

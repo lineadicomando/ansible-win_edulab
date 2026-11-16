@@ -6,7 +6,7 @@
 #   ansible-playbook tests/usr_zed.yaml -e vm_host=student01
 #
 # Builds the domain environment first (samba_dc.yaml: baseline revert, DC,
-# test users, join), then on one host:
+# test users, join), for that host alone, then on it:
 #   1. policy: Students present, student-bob absent (user rule beats group)
 #   2. first logon of student-alice, who never logged on: installs at logon
 #   3. usr-info: alice installed, bob excluded and never installed
@@ -16,6 +16,8 @@
 
 - name: Build domain environment
   ansible.builtin.import_playbook: samba_dc.yaml
+  vars:
+    domain_hosts: "{{ vm_host | default('teacher') }}"
 
 - name: Per-user install lifecycle - zed
   hosts: "{{ vm_host | default('teacher') }}"
