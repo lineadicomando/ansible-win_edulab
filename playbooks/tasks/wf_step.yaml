@@ -1,0 +1,172 @@
+---
+# Shared body of the playbooks in playbooks/: each of them is one step that a
+# cockpit-fleet workflow can chain, and runs the same from the command line and
+# from the MCP tools. The playbook gives the step a name and its win_workman
+# tasks; this file adds what a step needs around them:
+#
+#   1. a gate: a host that does not answer within wf_connect_timeout is set
+#      aside as unreachable, instead of failing the run (a lab always has PCs
+#      switched off);
+#   2. the tasks, in a block whose rescue records a host that fails, so that
+#      one broken PC does not stop the others;
+#   3. what the next steps need, passed on with set_stats (per_host: false);
+#   4. unless wf_tolerant is true, the hosts that did not complete the step
+#      fail at the end, as they would without the rescue: the recap and the
+#      exit code of a run by hand stay what they were.
+#
+# The playbook sets:
+#   wf_step               name of the step, prefixed to the messages in wf_failed
+#   wf_step_tasks         win_workman task strings for the dispatcher (may be empty)
+# and may set:
+#   wf_wake               send Wake-on-LAN first, to the hosts with ansible_mac (false)
+#   wf_step_mark          name of a list passed on, to which the hosts that
+#                         completed the step are added (maint_lock: wf_locked)
+#   wf_step_unmark        name of a list passed on, from which they are removed
+#   wf_step_publish       {name passed on: fact name}: the fact of each host that
+#                         has it, passed on as {host: value}
+#   wf_step_publish_keys  keep only these top-level keys of each published fact
+#
+# A template, a variable set or a survey may set:
+#   wf_tolerant           (bool, false) a host that fails or does not answer is
+#                         recorded and passed on, and the step still succeeds.
+#                         Set it on the templates used as workflow steps, and end
+#                         the workflow with wf_report.yaml, which fails if any
+#                         host failed along the way
+#   wf_connect_timeout    (int, 30) seconds the gate waits for each host
+#   win_workman_wol_timeout (int, 300) with wf_wake, seconds to wait for a host
+#                         to come up
+#
+# Passed on to the next steps of a workflow:
+#   wf_hosts              hosts that completed this step. The playbooks run on
+#                         wf_hosts when it is defined, so a step after this one
+#                         only touches the hosts that got this far
+#   wf_unreachable        hosts that never answered, accumulated over the steps
+#   wf_failed             {host: "step: message"}, accumulated over the steps
+#
+# A host that answers the gate and then drops its connection half-way through a
+# task is not rescued: Ansible does not hand an unreachable host to a rescue,
+# and a play-level ignore_unreachable would let the tasks after it pass over the
+# host unnoticed. It is recorded in wf_failed and the step fails (exit code 4).
+# set_stats does not reach the following plays of the same ansible-playbook
+# run: wf_* only travels between the steps of a cockpit-fleet workflow.
+
+- name: Wake the host
+  when:
+    - wf_wake | default(false) | bool
+    - ansible_mac is defined
+  block:
+    # The role itself, not the dispatcher: before any task the dispatcher sets
+    # the ACL of the remote temporary directories, which needs the host awake.
+    - name: Send Wake-on-LAN and wait for the host
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.wol
+      vars:
+        win_workman_action: "on"
+  rescue:
+    - name: Note that the host did not wake up
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} did not come up after Wake-on-LAN"
+
+- name: Wait for the host to answer
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ wf_connect_timeout | default(30) | int }}"
+  register: _wf_gate
+  ignore_errors: true
+
+- name: Record whether the host answered
+  ansible.builtin.set_fact:
+    wf_host_state: "{{ 'unreachable' if _wf_gate is failed else 'ok' }}"
+    wf_host_error: "{{ (wf_step ~ ': unreachable, ' ~ (_wf_gate.msg | default(''))) if _wf_gate is failed else '' }}"
+
+- name: "Run the step: {{ wf_step }}"
+  when:
+    - wf_host_state == 'ok'
+    - wf_step_tasks | default([]) | length > 0
+  block:
+    - name: Run the win_workman tasks
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: "{{ wf_step_tasks }}"
+  rescue:
+    - name: Record the failure of the host
+      ansible.builtin.set_fact:
+        wf_host_state: failed
+        wf_host_error: >-
+          {{ wf_step }}: {{ ansible_failed_task.name | default('task') }}:
+          {{ ansible_failed_result.msg | default('failed') }}
+
+- name: Pass the outcome of the step on
+  ansible.builtin.set_stats:
+    per_host: false
+    data: "{{ _wf_data }}"
+  run_once: true
+  vars:
+    _wf_outcome: >-
+      {%- set ns = namespace(ok=[], unreachable=[], failed={}) -%}
+      {%- for h in ansible_play_hosts_all -%}
+        {%- set st = hostvars[h].wf_host_state | default('failed') -%}
+        {%- if h not in ansible_play_hosts -%}
+          {%- set ns.failed = ns.failed | combine({h: wf_step ~ ': connection lost during the step'}) -%}
+        {%- elif st == 'ok' -%}
+          {%- set ns.ok = ns.ok + [h] -%}
+        {%- elif st == 'unreachable' -%}
+          {%- set ns.unreachable = ns.unreachable + [h] -%}
+        {%- else -%}
+          {%- set ns.failed = ns.failed | combine({h: hostvars[h].wf_host_error | default(wf_step ~ ': failed') | trim}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ {'ok': ns.ok, 'unreachable': ns.unreachable, 'failed': ns.failed} }}
+    _wf_marks: >-
+      {%- set ns = namespace(d={}) -%}
+      {%- if wf_step_mark | default('') -%}
+        {%- set ns.d = ns.d | combine({wf_step_mark: (lookup('vars', wf_step_mark, default=[]) + _wf_outcome.ok) | unique}) -%}
+      {%- endif -%}
+      {%- if wf_step_unmark | default('') -%}
+        {%- set ns.d = ns.d | combine({wf_step_unmark: lookup('vars', wf_step_unmark, default=[]) | difference(_wf_outcome.ok)}) -%}
+      {%- endif -%}
+      {{ ns.d }}
+    _wf_published: >-
+      {%- set ns = namespace(d={}, per_host={}) -%}
+      {%- for name, fact in (wf_step_publish | default({})).items() -%}
+        {%- set ns.per_host = {} -%}
+        {%- for h in ansible_play_hosts_all if hostvars[h][fact] is defined -%}
+          {%- set value = hostvars[h][fact] -%}
+          {%- if wf_step_publish_keys | default([]) and value is mapping -%}
+            {%- set value = value | dict2items | selectattr('key', 'in', wf_step_publish_keys) | items2dict -%}
+          {%- endif -%}
+          {%- set ns.per_host = ns.per_host | combine({h: value}) -%}
+        {%- endfor -%}
+        {%- set ns.d = ns.d | combine({name: ns.per_host}) -%}
+      {%- endfor -%}
+      {{ ns.d }}
+    _wf_data: >-
+      {{
+        {
+          'wf_hosts': _wf_outcome.ok,
+          'wf_unreachable': (wf_unreachable | default([]) + _wf_outcome.unreachable) | unique,
+          'wf_failed': wf_failed | default({}) | combine(_wf_outcome.failed),
+        }
+        | combine(_wf_marks, _wf_published)
+      }}
+
+- name: Summarise the step
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        [wf_step ~ ': ' ~ (ansible_play_hosts_all | map('extract', hostvars) | selectattr('wf_host_state', 'eq', 'ok') | list | length)
+          ~ ' of ' ~ (ansible_play_hosts_all | length) ~ ' host(s) completed']
+        + (['Unreachable: ' ~ _wf_unreach | join(', ')] if _wf_unreach else [])
+        + (['Failed: ' ~ _wf_failed_hosts | join(', ')] if _wf_failed_hosts else [])
+      }}
+  run_once: true
+  vars:
+    _wf_unreach: "{{ ansible_play_hosts_all | map('extract', hostvars) | selectattr('wf_host_state', 'eq', 'unreachable') | map(attribute='inventory_hostname') | list }}"
+    _wf_failed_hosts: "{{ ansible_play_hosts_all | map('extract', hostvars) | selectattr('wf_host_state', 'eq', 'failed') | map(attribute='inventory_hostname') | list }}"
+
+- name: Fail the hosts that did not complete the step
+  ansible.builtin.fail:
+    msg: "{{ wf_host_error | trim }}"
+  when:
+    - not (wf_tolerant | default(false) | bool)
+    - wf_host_state != 'ok'

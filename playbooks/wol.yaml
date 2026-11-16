@@ -1,9 +1,18 @@
 ---
+# Wake-on-LAN: sends the magic packet to the hosts with ansible_mac and waits
+# until they answer. A host without ansible_mac (a laptop on Wi-Fi) is only
+# waited for, and maintained as it is found.
+#
+# Workflow: the first step of any workflow on PCs that may be switched off.
+# Survey: win_workman_wol_timeout (int, 300), wf_connect_timeout (int, 30)
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
 - name: Wake on LAN
-  hosts: "{{ target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win') }}"  # override: -e target_hosts=<group>
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
   gather_facts: false
-  roles:
-    - role: lineadicomando.win_workman.dispatcher
+  tasks:
+    - name: Wake the hosts
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
       vars:
-        win_workman_tasks:
-          - "wol"
+        wf_step: wol
+        wf_wake: true
+        wf_step_tasks: []

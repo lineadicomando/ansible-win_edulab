@@ -1,11 +1,17 @@
 ---
-- name: Coding Packages
-  hosts: "{{ target_hosts | default('lab_coding') }}" # override: -e target_hosts=<group>
+# Example of a lab software set: the packages of a coding lab. For a set kept
+# in the inventory instead, see software.yaml.
+#
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Coding lab packages
+  hosts: "{{ wf_hosts | default(target_hosts | default('lab_coding')) }}"
   gather_facts: false
-  roles:
-    - role: lineadicomando.win_workman.dispatcher
+  tasks:
+    - name: Install the packages
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
       vars:
-        win_workman_tasks:
+        wf_step: lab_coding
+        wf_step_tasks:
           - "libreoffice"
           - "chrome"
           - "edge"

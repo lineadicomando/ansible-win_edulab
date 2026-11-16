@@ -1,0 +1,87 @@
+---
+# Last step of a cockpit-fleet workflow whose steps run with wf_tolerant: they
+# succeed even when some hosts fail, recording them in wf_failed, so that one
+# broken PC does not hold the others back. This step reads what they passed on,
+# prints it, and fails if any host failed along the way: the workflow then ends
+# failed, with the hosts and the reasons in the output of this step.
+#
+# Link it from the last step with "always", after the unlock if there is one.
+# It runs on the controller (localhost): give its template no limit, or a limit
+# that keeps localhost, or the play is skipped and nothing is checked.
+#
+# It also fails if hosts are still in maintenance mode (wf_locked): locked by
+# maint_lock.yaml and not unlocked by maint_unlock.yaml, which leaves there the
+# hosts it could not reach.
+#
+# Survey: wf_fail_on_unreachable (bool, false) also fail when hosts never
+#         answered; by default a PC switched off is reported, not a failure
+# Reads: wf_hosts, wf_unreachable, wf_failed, wf_locked, and the reports steps pass
+#        on (wf_wu_scan, wf_wu_report, wf_sysinfo)
+- name: Workflow report
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _hosts: "{{ wf_hosts | default([]) }}"
+    _unreachable: "{{ wf_unreachable | default([]) }}"
+    _failed: "{{ wf_failed | default({}) }}"
+    _locked: "{{ wf_locked | default([]) }}"
+    _strict_unreachable: "{{ wf_fail_on_unreachable | default(false) | bool }}"
+  tasks:
+    - name: Report the hosts
+      ansible.builtin.debug:
+        msg: >-
+          {%- set ns = namespace(lines=['Completed every step: ' ~ (_hosts | length) ~ ' host(s)'
+              ~ ((': ' ~ _hosts | join(', ')) if _hosts else '')]) -%}
+          {%- if _unreachable -%}
+            {%- set ns.lines = ns.lines + ['Unreachable: ' ~ _unreachable | join(', ')] -%}
+          {%- endif -%}
+          {%- if _locked -%}
+            {%- set ns.lines = ns.lines + ['Still in maintenance mode: ' ~ _locked | join(', ')] -%}
+          {%- endif -%}
+          {%- for h, why in _failed.items() -%}
+            {%- set ns.lines = ns.lines + ['Failed ' ~ h ~ ': ' ~ why] -%}
+          {%- endfor -%}
+          {{ ns.lines }}
+
+    - name: Report the Windows Update scan
+      ansible.builtin.debug:
+        msg: >-
+          {%- set ns = namespace(lines=[]) -%}
+          {%- for h, r in wf_wu_scan.items() -%}
+            {%- set ns.lines = ns.lines + [h ~ ': build ' ~ r.build ~ ', ' ~ (r.pending | length) ~ ' pending, '
+                ~ (r.optional | length) ~ ' optional'] -%}
+          {%- endfor -%}
+          {{ ns.lines }}
+      when: wf_wu_scan | default({}) | length > 0
+
+    - name: Report Windows Update
+      ansible.builtin.debug:
+        msg: >-
+          {%- set ns = namespace(lines=[]) -%}
+          {%- for h, r in wf_wu_report.items() -%}
+            {%- set build = r.build_before if r.build_before == r.build_after else r.build_before ~ ' -> ' ~ r.build_after -%}
+            {%- set ns.lines = ns.lines + [h ~ ': build ' ~ build ~ ', ' ~ r.installed ~ ' installed, ' ~ r.failed ~ ' failed'
+                ~ (', reboot still required' if r.reboot_required | bool else '')] -%}
+          {%- endfor -%}
+          {{ ns.lines }}
+      when: wf_wu_report | default({}) | length > 0
+
+    - name: Report the Windows versions
+      ansible.builtin.debug:
+        msg: >-
+          {%- set ns = namespace(lines=[]) -%}
+          {%- for h, s in wf_sysinfo.items() if s.os is defined -%}
+            {%- set ns.lines = ns.lines + [h ~ ': ' ~ s.os.display_version | default('?') ~ ' build ' ~ s.os.build | default('?')] -%}
+          {%- endfor -%}
+          {{ ns.lines }}
+      when: wf_sysinfo | default({}) | length > 0
+
+    - name: Fail if hosts failed or were left locked
+      ansible.builtin.fail:
+        msg: >-
+          {{
+            ([(_failed | length) ~ ' host(s) failed: ' ~ (_failed | list | join(', '))] if _failed | length > 0 else [])
+            + (['still in maintenance mode: ' ~ _locked | join(', ')] if _locked | length > 0 else [])
+            + (['never answered: ' ~ _unreachable | join(', ')] if (_strict_unreachable and _unreachable | length > 0) else [])
+          }}
+      when: (_failed | length > 0) or (_locked | length > 0) or (_strict_unreachable and _unreachable | length > 0)
