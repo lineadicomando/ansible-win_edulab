@@ -1,0 +1,31 @@
+---
+# Installs, updates or removes software with win_workman task strings: chrome,
+# vscode, python314, firefox-off, ... The list comes from the survey, or else
+# from win_edulab_software in the inventory, so that one template serves every
+# lab and each lab keeps its own set in its group_vars:
+#
+#   # inventories/<lab>/group_vars/students/vars.yaml
+#   win_edulab_software: [libreoffice, chrome, vscode, python314]
+#
+# A host in two groups that both set win_edulab_software gets one of the two
+# lists (Ansible does not merge lists): keep the set on one group per host.
+# A host with no list is only checked for reachability.
+#
+# Survey: software (text; default empty = win_edulab_software) task strings
+#           joined by commas, e.g. chrome,vscode or firefox-off
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Software
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  vars:
+    software: ""
+  tasks:
+    - name: Install the software
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: software
+        wf_step_tasks: >-
+          {{
+            (software.split(',') | map('trim') | select | list if software is string else software)
+            if software | length > 0 else win_edulab_software | default([])
+          }}

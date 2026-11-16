@@ -138,12 +138,11 @@ ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-off"}'
 
 For a full lifecycle test that can be re-run cleanly, follow this structure:
 
-> **Do not import `../playbooks/win_wm.yaml` to wake or set up the VM.** Its play
-> runs on `hosts: all` and only a command-line `-l` narrows it: `hosts:` or
-> `target_hosts:` passed as import vars are ignored, and `t: wol` wakes every VM
-> in the inventory (DC and both students included). Wake through
-> `../playbooks/wol.yaml`, which honours `target_hosts`, and run `openssh-harden`
-> inside the test play. Check with `ansible-playbook <test> --list-hosts`.
+> **Wake through `../playbooks/wol.yaml`** with `target_hosts`, and run
+> `openssh-harden` inside the test play. `win_wm.yaml` now honours
+> `target_hosts` too (default `win_managed`, a `wol` in `t` wakes first), but
+> its gate fails a host that is still booting: `wol.yaml` waits for it. Check
+> with `ansible-playbook <test> --list-hosts`.
 
 ```yaml
 ---

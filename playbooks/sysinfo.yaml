@@ -1,0 +1,38 @@
+---
+# Read-only system information: Windows edition, release and build, identity,
+# hardware, disks, network, Windows Update state, and on request TPM and Secure
+# Boot. Prints a line per host and a summary of the lab.
+#
+# Workflow: first and last step around updates, to compare the builds;
+# wf_report.yaml prints release and build per host from what this passes on.
+# Survey: sysinfo_sections (text; default empty = os, identity, hw, disk, net,
+#           wu) sections joined by -, e.g. os, os-wu, os-security-wu
+#         sysinfo_publish (text; default os) sections passed on, joined by
+#           commas: a whole lab of every section can exceed the 64 kB that
+#           cockpit-fleet keeps of what a run passes on
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+#            wf_sysinfo, {host: {section: ...}} for the sections in sysinfo_publish
+- name: System information
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  vars:
+    sysinfo_sections: ""
+    sysinfo_publish: os
+  tasks:
+    - name: Check sysinfo_sections
+      ansible.builtin.assert:
+        that: sysinfo_sections | string is match('^([a-z]+(-[a-z]+)*)?$')
+        fail_msg: "sysinfo_sections must be sections joined by -, such as os-wu, not '{{ sysinfo_sections }}'"
+        quiet: true
+      run_once: true
+
+    - name: Collect the system information
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: sysinfo
+        wf_step_tasks:
+          - "sysinfo-on{{ ('-' ~ sysinfo_sections) if sysinfo_sections | string | length > 0 else '' }}"
+        wf_step_publish:
+          wf_sysinfo: win_workman_sysinfo
+        wf_step_publish_keys: >-
+          {{ sysinfo_publish.split(',') | map('trim') | select | list if sysinfo_publish is string else sysinfo_publish }}

@@ -21,8 +21,6 @@
     cmd: snapshot-revert
     snapshot: baseline
 
-# Not playbooks/win_wm.yaml: its play runs on hosts: all and only -l narrows it,
-# so it would wake and set up every VM in the inventory
 - name: Wake target VM
   ansible.builtin.import_playbook: ../playbooks/wol.yaml
   vars:
