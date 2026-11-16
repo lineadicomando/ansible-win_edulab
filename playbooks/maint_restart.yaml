@@ -1,0 +1,27 @@
+---
+# Restarts the hosts, or only those with a reboot pending (CBS, Windows Update,
+# PendingFileRenameOperations), waiting until they are back.
+#
+# Workflow: restart_when=pending before the checks (sfc refuses to scan with a
+# repair pending), restart_when=always as the last step after the unlock.
+# Survey: restart_when (choice: always, pending; default always)
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Restart
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  vars:
+    restart_when: always
+  tasks:
+    - name: Check restart_when
+      ansible.builtin.assert:
+        that: restart_when in ['always', 'pending']
+        fail_msg: "restart_when must be always or pending, not {{ restart_when }}"
+        quiet: true
+      run_once: true
+
+    - name: Restart the hosts
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: restart
+        wf_step_tasks:
+          - "{{ 'restart-if-pending' if restart_when == 'pending' else 'restart' }}"

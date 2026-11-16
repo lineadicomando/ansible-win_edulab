@@ -1,0 +1,23 @@
+---
+# Maintenance mode: logs users off and restricts logon to the administrators,
+# with a notice on the logon screen. What each host had is saved on the host
+# and given back by maint_unlock.yaml.
+#
+# Workflow: after wol.yaml, before the maintenance steps. Link maint_unlock.yaml
+# to the last of them with "always", so that the hosts are unlocked whatever
+# happens: it unlocks the hosts listed in wf_locked.
+# Survey: win_workman_mode_title (text), win_workman_mode_text (text),
+#         win_workman_mode_force_logoff (bool, true)
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+#            wf_locked, the hosts this step locked
+- name: Maintenance mode on
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  tasks:
+    - name: Lock the hosts
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: lock
+        wf_step_tasks:
+          - lock
+        wf_step_mark: wf_locked

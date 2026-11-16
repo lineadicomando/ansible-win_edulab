@@ -1,0 +1,22 @@
+---
+# Leaves maintenance mode, giving back what maint_lock.yaml saved on each host.
+# Changes nothing on a host that is not locked.
+#
+# Workflow: linked with "always" after the last maintenance step. It runs on the
+# hosts maint_lock.yaml passed on in wf_locked, including those that failed a
+# step in between, and takes them out of it; wf_report.yaml fails if any host
+# is left in wf_locked. Without wf_locked it runs on wf_hosts or target_hosts.
+# Survey: wf_connect_timeout (int, 30): raise it after steps that restart hosts
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+#            wf_locked, without the hosts unlocked here
+- name: Maintenance mode off
+  hosts: "{{ wf_locked | default(wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win'))) }}"
+  gather_facts: false
+  tasks:
+    - name: Unlock the hosts
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: lock-off
+        wf_step_tasks:
+          - lock-off
+        wf_step_unmark: wf_locked

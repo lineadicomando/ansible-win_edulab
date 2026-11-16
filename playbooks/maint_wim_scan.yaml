@@ -1,0 +1,18 @@
+---
+# Scans the component store for corruption (DISM /ScanHealth). A repairable
+# store fails the host unless the survey says otherwise.
+#
+# Workflow: before maint_sfc.yaml; with fail_on_repairable false, before an
+# approval and maint_wim_repair.yaml.
+# Survey: win_workman_wim_scan_fail_on_repairable (bool, true)
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Component store scan
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  tasks:
+    - name: Scan the component store
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: wim-scan
+        wf_step_tasks:
+          - wim-scan

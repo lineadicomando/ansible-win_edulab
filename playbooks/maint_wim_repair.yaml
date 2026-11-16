@@ -1,0 +1,18 @@
+---
+# Repairs the component store (DISM /RestoreHealth), from Windows Update or from
+# a local source of the very same version. Long: up to an hour per host.
+#
+# Survey: win_workman_wim_repair_source (text, empty = Windows Update), e.g.
+#         wim:C:\Windows\Temp\install.wim:1; win_workman_wim_repair_limit_access
+#         (bool, true)
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Component store repair
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  tasks:
+    - name: Repair the component store
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: wim-repair
+        wf_step_tasks:
+          - wim-repair

@@ -1,0 +1,17 @@
+---
+# Disk optimisation: retrim on SSDs, analysis and defragmentation on HDDs.
+#
+# Variables: win_workman_optimize_volumes (list, [C]), a list: set it in the
+#            inventory or in the template's variables, not in a survey
+# Survey: win_workman_optimize_defrag (bool, false)
+# Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
+- name: Disk optimisation
+  hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
+  gather_facts: false
+  tasks:
+    - name: Optimise the disks
+      ansible.builtin.import_tasks: tasks/wf_step.yaml
+      vars:
+        wf_step: optimize
+        wf_step_tasks:
+          - optimize
