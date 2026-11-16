@@ -7,28 +7,49 @@ created by `samba_dc_users.yaml` are part of the test environment and stay here.
 
 ## Structure
 
-```
-tests/
-  virsh.yaml           # Utility: VM management via virsh (revert, start, shutdown, ...)
-  vm_build_windows.yaml # Utility: build a Windows test VM from scratch, unattended, up to its baseline
-  vm_build_dc.yaml     # Utility: build the Debian VM of the DC from scratch, preseeded, up to its baseline
-  vm_build/            # Answer file, first-logon script and preseed templates of the two above
-  revert_baseline.yaml # Utility: revert to baseline + wake for arbitrary target (var t)
-  requirements.yaml    # Collections needed by the domain tests only (lineadicomando.samba_dc)
-  samba_dc.yaml        # Samba AD DC build, test users, domain join of win_managed, shared folders
-  samba_dc_build.yaml  # Samba AD DC alone, from its baseline
-  samba_dc_provision.yaml # The samba_dc_build role on the DC (imported by the two above)
-  samba_dc_users.yaml  # Domain test users and groups (imported by samba_dc.yaml)
-  usr_zed.yaml         # Per-user deferred install (usr action) with domain users, on zed
-  samba_share.yaml     # Shared folders: SMB access per user, drive mapping at logon, revoke, delete (imported by samba_dc.yaml)
-  lab_cad.yaml         # CAD lab deployment test
-  lab_coding.yaml      # Coding lab deployment test
-  seb_classroom.yaml   # SEB classroom deployment test
-  veyon.yaml           # Veyon deployment test
-  shutdown_if_nouser.yaml # shutdown-if-nouser: stays on with an Active or Disconnected session, shuts down without
-  autoshutdown.yaml    # autoshutdown: schedule forms, validation, off; the task fires daily and weekly, and not on other days
-  lock.yaml            # lock: on/off give back notice, last username setting and logon right; repeated calls, fallback users, reset
-```
+Three kinds of files live here. A test reverts its VMs to `baseline`, wakes them,
+runs, and asserts every step: a green run is a passing test.
+
+**Tools** — drive and build the VMs, assert nothing:
+
+| File | What it does |
+|---|---|
+| `virsh.yaml` | VM management via virsh: `snapshot-revert`, `start`, `shutdown`, `reboot`, `reset` |
+| `vm_build_windows.yaml` | Builds a Windows test VM from scratch, unattended, up to its `baseline` |
+| `vm_build_dc.yaml` | Builds the Debian VM of the DC from scratch, preseeded, up to its `baseline` |
+| `vm_build/` | Answer file, first-logon script and preseed templates of the two above |
+
+**Fixtures** — the test domain, built on the VMs for the tests that need one:
+
+| File | What it does |
+|---|---|
+| `requirements.yaml` | Collections needed by the domain tests only (`lineadicomando.samba_dc`) |
+| `samba_dc.yaml` | The whole environment: baseline revert, Samba AD DC, test users, domain join of the Windows hosts (`-e domain_hosts=teacher` for one) |
+| `samba_dc_build.yaml` | The Samba AD DC alone, from its baseline |
+| `samba_dc_provision.yaml` | The `samba_dc_build` role on the DC (imported by the two above) |
+| `samba_dc_users.yaml` | Domain test users and groups (imported by `samba_dc.yaml` and `samba_share.yaml`) |
+
+**Tests**:
+
+| File | What it tests | VMs |
+|---|---|---|
+| `wf_step.yaml` | The shared body of the playbooks as workflow steps: hosts that do not answer, hosts that fail, `wf_tolerant`, what is passed on; `maint_lock`, `maint_unlock` and `wf_report` on top of it | one Windows |
+| `deploy.yaml` | A deployment playbook (`-e pb=veyon`, `seb_classroom`, `lab_coding`, `lab_cad`) installs what it lists | `win_managed`, or `-e test_hosts=` |
+| `lock.yaml` | `lock`: on/off give back notice, last username setting and logon right; repeated calls, fallback users, reset | one Windows |
+| `autoshutdown.yaml` | `autoshutdown`: schedule forms, validation, off; the task fires daily and weekly, and not on other days | one to three Windows |
+| `shutdown_if_nouser.yaml` | `shutdown-if-nouser`: stays on with an Active or Disconnected session, shuts down without | one Windows |
+| `usr_zed.yaml` | Per-user deferred install (`usr` action) with domain users, on `zed`; builds the domain first | DC, one Windows |
+| `samba_share.yaml` | Shared folders: SMB access per user, drive mapping at logon, revoke, delete; on a domain that is already up | DC, one Windows |
+
+The roles under test belong to the `lineadicomando.win_workman` collection, which
+has no VMs of its own: its tests that need a real Windows are here. The lifecycle
+of a single package (`info`, `download`, `copy`, `on`, `is_present`, `off`) is not a
+playbook of this directory: it is run task by task when the package is added or
+updated.
+
+`tests/wf_step.yaml` reads the outcome of each step from the `ansible.posix.json`
+callback: the `ansible.posix` collection ships with the `ansible` package, and is
+otherwise installed with `ansible-galaxy collection install ansible.posix`.
 
 ## Test environment
 
@@ -83,8 +104,8 @@ NetBIOS name, used by the tests on the PCs as the `DOMAIN\user` prefix.
 
 `samba_dc_users.yaml` creates these accounts on the DC, with the lab password
 from the vault (`ansible_vault_password`). `samba_dc.yaml` imports it right
-after building the DC; it also runs on its own against a DC that is already
-up, without reverting anything:
+after building the DC, and `samba_share.yaml` before using them; it also runs on
+its own against a DC that is already up, without reverting anything:
 
 ```bash
 ansible-playbook tests/samba_dc_users.yaml
@@ -102,16 +123,25 @@ creation only.
 
 ## How tests work
 
-Every test playbook follows the same pattern:
+Every test starts the same way:
 
-1. Revert the VM to the `baseline` snapshot via `virsh.yaml`
-2. Wake the VM via `playbooks/wol.yaml` — the magic packet reaches the VM through
+1. Revert the VMs to the `baseline` snapshot via `virsh.yaml`
+2. Wake them via `playbooks/wol.yaml` — the magic packet reaches the VM through
    [`virsh_wakeonlan`](https://github.com/lineadicomando/virsh_wakeonlan), the
    systemd listener that starts the matching libvirt domain
-3. Run the role or task sequence under test
+3. Run `openssh-harden`, then the steps under test, each followed by its assert
 
-Steps 1 and 2 are embedded in every test playbook, so running a test directly is
-sufficient — no manual preparation needed.
+Both steps are embedded, so running a test is sufficient — no manual preparation.
+`usr_zed.yaml` gets them from `samba_dc.yaml`, which it imports; `samba_share.yaml`
+is the exception: it reverts nothing and runs on a domain that is already up, the
+one `samba_dc.yaml` or `usr_zed.yaml` left.
+
+To prepare a VM without running a test:
+
+```bash
+ansible-playbook tests/virsh.yaml -e vm=teacher -e cmd=snapshot-revert -e snapshot=baseline
+ansible-playbook playbooks/wol.yaml -e target_hosts=teacher
+```
 
 ## Running tests
 
@@ -120,40 +150,18 @@ sufficient — no manual preparation needed.
 ansible-playbook tests/<test-playbook>.yaml
 ```
 
-### Manual revert
-
-`revert_baseline.yaml` can be used to prepare a VM without running a test:
+A Windows VM takes 4 GiB and the DC 2 GiB: check the free memory of the host first,
+and name fewer hosts when they do not all fit.
 
 ```bash
-# default target: win_managed
-ansible-playbook tests/revert_baseline.yaml
-
-# specific target via variable t
-ansible-playbook tests/revert_baseline.yaml -e t=teacher
+ansible-playbook tests/wf_step.yaml                              # teacher
+ansible-playbook tests/lock.yaml -e vm_host=student01
+ansible-playbook tests/autoshutdown.yaml -e test_hosts=teacher,student01
+ansible-playbook tests/deploy.yaml -e pb=veyon                   # teacher and student01
+ansible-playbook tests/deploy.yaml -e pb=lab_coding -e test_hosts=teacher
+ansible-playbook tests/usr_zed.yaml                              # DC and teacher
+ansible-playbook tests/samba_dc.yaml -e domain_hosts=teacher && ansible-playbook tests/samba_share.yaml
 ```
 
-## Test playbooks
-
-### `lab_cad.yaml` — CAD lab
-
-**Target:** `teacher` | **Snapshot:** `baseline`
-
-Runs the structural playbook `playbooks/lab_cad.yaml` against the test VM.
-
-### `lab_coding.yaml` — Coding lab
-
-**Target:** `lab_coding` | **Snapshot:** `baseline`
-
-Runs the structural playbook `playbooks/lab_coding.yaml` against the test VM.
-
-### `seb_classroom.yaml` — SEB Classroom
-
-**Target:** `win_managed` | **Snapshot:** `baseline`
-
-Runs the structural playbook `playbooks/seb_classroom.yaml` against the test VM.
-
-### `veyon.yaml` — Veyon
-
-**Target:** `win_managed` | **Snapshot:** `baseline`
-
-Runs the structural playbook `playbooks/veyon.yaml` against the test VM.
+Without VMs, the playbooks are checked with `ansible-lint` from the project root,
+which also runs their syntax check.

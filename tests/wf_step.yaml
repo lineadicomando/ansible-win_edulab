@@ -1,0 +1,302 @@
+---
+# Test for playbooks/tasks/wf_step.yaml, the shared body of the playbooks, and
+# for the playbooks that depend on what it passes on: maint_lock, maint_unlock,
+# wf_report.
+#
+#   ansible-playbook tests/wf_step.yaml
+#   ansible-playbook tests/wf_step.yaml -e vm_host=student01
+#
+# set_stats cannot be read back inside a run, and what a step passes on only
+# travels between the steps of a workflow. So the test plays the workflow
+# engine: every step is an ansible-playbook of its own (wf_step/run_step.yaml),
+# whose exit code, recap and stats are read from the JSON callback of
+# ansible.posix, and whose stats are the extra vars of the next step.
+#
+# From the baseline snapshot, on one host that is on and one that never answers
+# (ghost, in wf_step/ghost.yaml):
+#   1. a step run by hand fails for the host that does not answer, and still
+#      completes and passes on the one that does
+#   2. the same step with wf_tolerant succeeds; the host that does not answer is
+#      set aside in wf_unreachable, not failed
+#   3. maint_lock runs on wf_hosts alone, locks the host and marks it in wf_locked
+#   4. a step that fails with wf_tolerant succeeds, takes the host out of
+#      wf_hosts and records why in wf_failed
+#   5. the step after it has no host left and touches nothing
+#   6. maint_unlock still unlocks the host, from wf_locked, and unmarks it
+#   7. wf_report fails the workflow, because a host failed along the way
+#   8. wf_report: succeeds with unreachable hosts only, fails on them with
+#      wf_fail_on_unreachable, fails on a host left in wf_locked
+#   9. a step that fails without wf_tolerant fails the host and the run, after
+#      recording it in wf_failed
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Revert to baseline
+  ansible.builtin.import_playbook: virsh.yaml
+  vars:
+    vm: ["{{ vm_host | default('teacher') }}"]
+    cmd: snapshot-revert
+    snapshot: baseline
+
+- name: Wake target VM
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ vm_host | default('teacher') }}"
+
+- name: Authorize SSH key access
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  tasks:
+    - name: Authorize SSH
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [openssh-harden]
+
+- name: Workflow steps - wf_step
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    wf_test_host: "{{ vm_host | default('teacher') }}"
+    wf_test_targets: "{{ wf_test_host }},ghost"
+    # Seconds the gate of each step waits for the host that never answers
+    wf_test_gate: 10
+    # A task that changes nothing, and one that fails on a host without Chrome
+    wf_test_ok: chrome-info
+    wf_test_ko: chrome-is_present
+  tasks:
+    # ---- 1. a step run by hand -----------------------------------------------
+
+    - name: Run a step on both hosts, by hand
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: win_wm
+        wf_test_vars:
+          target_hosts: "{{ wf_test_targets }}"
+          t: "{{ wf_test_ok }}"
+          wf_connect_timeout: "{{ wf_test_gate }}"
+
+    - name: Assert the run failed for the silent host alone
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc != 0
+          - wf_test.stats.wf_hosts == [wf_test_host]
+          - wf_test.stats.wf_unreachable == ['ghost']
+          - wf_test.stats.wf_failed == {}
+          - wf_test.recap[wf_test_host].failures == 0
+          - wf_test.recap.ghost.failures == 1
+          - wf_test.recap.ghost.unreachable == 0
+        fail_msg: "{{ wf_test | to_json }}"
+
+    # ---- 2. the same step in a workflow --------------------------------------
+
+    - name: Start a workflow
+      ansible.builtin.set_fact:
+        wf_test_passed_on: {}
+
+    - name: Run the step on both hosts, tolerant
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: win_wm
+        wf_test_vars:
+          target_hosts: "{{ wf_test_targets }}"
+          t: "{{ wf_test_ok }}"
+          wf_connect_timeout: "{{ wf_test_gate }}"
+          wf_tolerant: true
+
+    - name: Assert the run succeeded and set the silent host aside
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc == 0
+          - wf_test.stats.wf_hosts == [wf_test_host]
+          - wf_test.stats.wf_unreachable == ['ghost']
+          - wf_test.stats.wf_failed == {}
+          - wf_test.recap.ghost.failures == 0
+        fail_msg: "{{ wf_test | to_json }}"
+
+    - name: Keep what a workflow with nothing but a silent host passes on
+      ansible.builtin.set_fact:
+        wf_test_unreachable_only: "{{ wf_test_passed_on }}"
+
+    # ---- 3. maint_lock --------------------------------------------------------
+
+    # target_hosts is what the template would carry: wf_hosts has to win over it
+    - name: Lock
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: maint_lock
+        wf_test_vars:
+          target_hosts: "{{ wf_test_targets }}"
+          wf_connect_timeout: "{{ wf_test_gate }}"
+          wf_tolerant: true
+
+    - &wf_test_read_lock
+      name: Read whether the host is in maintenance mode
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          # lock keeps there what it changed; lock-off gives it back and leaves the key empty
+          $key = Get-Item 'HKLM:\SOFTWARE\Ansible\WinMaint' -ErrorAction SilentlyContinue
+          $Ansible.Result = [bool]($key -and $key.ValueCount -gt 0)
+      delegate_to: "{{ wf_test_host }}"
+      register: wf_test_lock
+
+    - name: Assert it ran on wf_hosts alone, locked the host and marked it
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc == 0
+          - wf_test.recap | list == [wf_test_host]
+          - wf_test.stats.wf_hosts == [wf_test_host]
+          - wf_test.stats.wf_locked == [wf_test_host]
+          - wf_test.stats.wf_unreachable == ['ghost']
+          - wf_test_lock.result
+        fail_msg: "{{ wf_test | to_json }} - locked: {{ wf_test_lock.result }}"
+
+    # ---- 4. a step that fails -------------------------------------------------
+
+    - name: Run a step that fails on the host, tolerant
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: win_wm
+        wf_test_vars:
+          t: "{{ wf_test_ko }}"
+          wf_connect_timeout: "{{ wf_test_gate }}"
+          wf_tolerant: true
+
+    - name: Assert the run succeeded and recorded the failure
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc == 0
+          - wf_test.recap[wf_test_host].failures == 0
+          - wf_test.recap[wf_test_host].rescued == 1
+          - wf_test.stats.wf_hosts == []
+          - wf_test.stats.wf_failed | list == [wf_test_host]
+          - "wf_test.stats.wf_failed[wf_test_host] is match('win_wm: ')"
+          - wf_test.stats.wf_unreachable == ['ghost']
+          - wf_test_passed_on.wf_locked == [wf_test_host]
+        fail_msg: "{{ wf_test | to_json }}"
+
+    # ---- 5. a step with no host left ------------------------------------------
+
+    - name: Run a step after the failure
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: win_wm
+        wf_test_vars:
+          target_hosts: "{{ wf_test_targets }}"
+          t: "{{ wf_test_ok }}"
+          wf_connect_timeout: "{{ wf_test_gate }}"
+          wf_tolerant: true
+
+    - name: Assert it touched no host and passed nothing on
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc == 0
+          - wf_test.recap == {}
+          - wf_test.stats == {}
+          - wf_test_passed_on.wf_failed | list == [wf_test_host]
+        fail_msg: "{{ wf_test | to_json }}"
+
+    # ---- 6. maint_unlock ------------------------------------------------------
+
+    - name: Unlock
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: maint_unlock
+        wf_test_vars:
+          wf_connect_timeout: "{{ wf_test_gate }}"
+          wf_tolerant: true
+
+    - *wf_test_read_lock
+
+    - name: Assert the host that failed was unlocked all the same, and unmarked
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc == 0
+          - wf_test.recap | list == [wf_test_host]
+          - wf_test.stats.wf_locked == []
+          - wf_test.stats.wf_failed | list == [wf_test_host]
+          - wf_test.stats.wf_unreachable == ['ghost']
+          - not wf_test_lock.result
+        fail_msg: "{{ wf_test | to_json }} - locked: {{ wf_test_lock.result }}"
+
+    # ---- 7. wf_report at the end of the workflow ------------------------------
+
+    - name: Keep what the whole workflow passed on
+      ansible.builtin.set_fact:
+        wf_test_workflow: "{{ wf_test_passed_on }}"
+
+    - name: Report the workflow
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: wf_report
+
+    - name: Assert the report fails the workflow
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc != 0
+          - wf_test.recap.localhost.failures == 1
+        fail_msg: "{{ wf_test | to_json }}"
+
+    # ---- 8. wf_report on other outcomes ---------------------------------------
+
+    - name: Report a workflow with nothing but a silent host
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: wf_report
+        wf_test_passed_on: "{{ wf_test_unreachable_only }}"
+
+    - name: Assert a host that is switched off is not a failure
+      ansible.builtin.assert:
+        that: wf_test.rc == 0
+        fail_msg: "{{ wf_test | to_json }}"
+
+    - name: Report it again, strict on the silent hosts
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: wf_report
+        wf_test_passed_on: "{{ wf_test_unreachable_only }}"
+        wf_test_vars:
+          wf_fail_on_unreachable: true
+
+    - name: Assert it is a failure when asked
+      ansible.builtin.assert:
+        that: wf_test.rc != 0
+        fail_msg: "{{ wf_test | to_json }}"
+
+    - name: Report a workflow that left a host locked
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: wf_report
+        wf_test_passed_on:
+          wf_hosts: ["{{ wf_test_host }}"]
+          wf_unreachable: []
+          wf_failed: {}
+          wf_locked: ["{{ wf_test_host }}"]
+
+    - name: Assert a host left in maintenance mode is a failure
+      ansible.builtin.assert:
+        that: wf_test.rc != 0
+        fail_msg: "{{ wf_test | to_json }}"
+
+    # ---- 9. a step that fails, run by hand ------------------------------------
+
+    - name: Run the step that fails, by hand
+      ansible.builtin.include_tasks: wf_step/run_step.yaml
+      vars:
+        wf_test_playbook: win_wm
+        wf_test_passed_on: {}
+        wf_test_vars:
+          target_hosts: "{{ wf_test_host }}"
+          t: "{{ wf_test_ko }}"
+          wf_connect_timeout: "{{ wf_test_gate }}"
+
+    - name: Assert the host and the run failed, with the failure recorded
+      ansible.builtin.assert:
+        that:
+          - wf_test.rc != 0
+          - wf_test.recap[wf_test_host].failures == 1
+          - wf_test.recap[wf_test_host].rescued == 1
+          - wf_test.stats.wf_hosts == []
+          - wf_test.stats.wf_failed | list == [wf_test_host]
+        fail_msg: "{{ wf_test | to_json }}"

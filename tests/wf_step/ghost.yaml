@@ -1,0 +1,8 @@
+---
+# A managed PC that never answers, for tests/wf_step.yaml: an address of
+# TEST-NET-1 (RFC 5737), which no machine has. Added to the inventory of the
+# runs the test starts, never to the one the test itself runs on.
+win_managed:
+  hosts:
+    ghost:
+      ansible_host: 192.0.2.1

@@ -49,6 +49,8 @@ wins over the survey of the next one:
 
 `set_stats` only travels between the steps of a workflow: plays chained with
 `import_playbook` in one run (as in `tests/`) do not see it.
+[`tests/wf_step.yaml`](../tests/wf_step.yaml) plays a workflow for that reason, one
+`ansible-playbook` per step, and asserts what each step passes on.
 
 **Survey.** The header of each playbook lists the variables worth asking at
 launch, with type and default. A survey answer is text, a number, a choice or a

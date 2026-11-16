@@ -1,0 +1,51 @@
+---
+# One step of the workflow tests/wf_step.yaml plays: runs a playbook of
+# playbooks/ in an ansible-playbook of its own, as cockpit-fleet does, and keeps
+# what came out of it in wf_test:
+#   rc     exit code of the run
+#   stats  what the step passed on with set_stats
+#   recap  the play recap, {host: {ok, failures, rescued, unreachable, ...}}
+# What a step passes on is given to the next ones as extra vars, on top of what
+# the steps before passed on (wf_test_passed_on): start another workflow by
+# setting wf_test_passed_on to {}.
+#
+# The caller sets:
+#   wf_test_playbook  name of the playbook, without extension
+#   wf_test_vars      extra vars of the step (the survey of its template)
+- name: "Run the step {{ wf_test_playbook }}"
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['ansible-playbook']
+        + ansible_inventory_sources | map('regex_replace', '^', '--inventory=') | list
+        + ['--inventory=tests/wf_step/ghost.yaml',
+           'playbooks/' ~ wf_test_playbook ~ '.yaml',
+           '--extra-vars', wf_test_vars | default({}) | combine(wf_test_passed_on | default({})) | to_json]
+      }}
+    chdir: "{{ playbook_dir }}/.."
+  environment:
+    ANSIBLE_STDOUT_CALLBACK: ansible.posix.json
+    # Without it the callback leaves what set_stats passed on out of its report
+    ANSIBLE_SHOW_CUSTOM_STATS: "true"
+  register: wf_test_run
+  changed_when: false
+  failed_when: false
+
+- name: Assert the run gave a report
+  ansible.builtin.assert:
+    that: wf_test_run.stdout is match('\s*\{')
+    fail_msg: "rc {{ wf_test_run.rc }}: {{ wf_test_run.stderr | default('') }} {{ wf_test_run.stdout | default('') | truncate(2000) }}"
+    quiet: true
+
+- name: Keep the outcome of the step
+  ansible.builtin.set_fact:
+    wf_test:
+      rc: "{{ wf_test_run.rc }}"
+      stats: "{{ (wf_test_run.stdout | from_json).global_custom_stats }}"
+      recap: "{{ (wf_test_run.stdout | from_json).stats }}"
+    wf_test_passed_on: >-
+      {{ wf_test_passed_on | default({}) | combine((wf_test_run.stdout | from_json).global_custom_stats) }}
+
+- name: Show the outcome of the step
+  ansible.builtin.debug:
+    msg: "{{ wf_test_playbook }}: rc {{ wf_test.rc }}, passed on {{ wf_test.stats }}"
