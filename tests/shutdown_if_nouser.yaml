@@ -103,7 +103,7 @@
 
     # Checked before shutdown-if-nouser too, so a helper that misses the
     # session fails here instead of shutting the host down under the test
-    - name: List sessions with {{ ansible_user }} logged on
+    - name: List sessions after the logon of {{ ansible_user }}
       ansible.builtin.include_role:
         name: lineadicomando.win_workman.pkg_utils
         tasks_from: user_sessions

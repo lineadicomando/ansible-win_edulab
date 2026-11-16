@@ -15,3 +15,6 @@ skip_list:
   # Remaining long lines are ansible_ssh_common_args strings and embedded
   # PowerShell snippets that cannot be meaningfully wrapped.
   - yaml[line-length]
+  # run_once is how a playbook checks a survey answer once for the whole play
+  # and how wf_step.yaml passes the outcome on; no play here uses the free strategy.
+  - run-once[task]
