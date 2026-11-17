@@ -15,7 +15,7 @@ from adhoc import (
     secret_values,
     summarise,
 )
-from ansible_runner import MAX_FORKS, build_playbook_command, merge_sensitive_vars, validate_sensitive_vars, run_command, run_raw, run_status, start_run, validate_forks, wait_run
+from ansible_runner import MAX_FORKS, build_playbook_command, validate_arguments, merge_sensitive_vars, validate_sensitive_vars, run_command, run_raw, run_status, start_run, validate_forks, wait_run
 from runlog import NotifyFn, done_path, format_status
 from inventory import list_inventories, load_inventory
 from preflight import preflight
@@ -435,6 +435,10 @@ async def handle_list_tools(ctx: ServerRequestContext, params: PaginatedRequestP
 async def handle_call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
     name = params.name
     arguments = params.arguments or {}
+
+    error = validate_arguments(_get_tools(), name, arguments)
+    if error:
+        return CallToolResult(content=[TextContent(type="text", text=f"Error: {error}")], isError=True)
 
     if name == "get_inventory":
         inventory = arguments.get("inventory", "school")
