@@ -178,7 +178,8 @@ Probed values, not assumptions. `sidecar` = a digest file next to the installer.
 | Vivaldi | `vivaldi.com/download/` (page lists old versions too — filter) | no (`.sha256` and `.sha256sum` → 404) |
 | Blender | `download.blender.org/release/` | no (`.sha256` → 404) |
 | LibreOffice | mirror directory listing | no (`.sha256sum` → 404) |
-| Evergreen "latest" URLs — `chrome`, `edge`, `gcpw`, `googledrive`, `vcredist14`, `brave`, `postman` | URL carries no version; read the shipped version from the vendor's release notes, or install and check `info` | n/a — the file behind the stable URL changes silently. `chrome` omits `checksum` for this reason; `edge` keeps one and needs a re-hash at every bump |
+| Visual C++ Redistributable — `vcredist14` | follow the redirect of `https://aka.ms/vc14/vc_redist.x64.exe` (`curl -sIL`); download it (~19 MB) and read `ProductVersion` from its version resource: it equals the DisplayVersion of the bundle's uninstall entry | **yes** — the final `download.visualstudio.microsoft.com/download/pr/<guid>/<SHA256>/VC_redist.x64.exe` URL carries the sha256 in its path (lowercase it). Pin that permalink, not `aka.ms`; the version is one variable, `win_workman_vcredist14_version` |
+| Evergreen "latest" URLs — `chrome`, `edge`, `gcpw`, `googledrive`, `brave`, `postman` | URL carries no version; read the shipped version from the vendor's release notes, or install and check `info` | n/a — the file behind the stable URL changes silently. `chrome` omits `checksum` for this reason; `edge` keeps one and needs a re-hash at every bump |
 | Autodesk — `autocadlt2026` | download portal, per-locale URLs | no — these are multi-part archives, hash each part |
 
 `zed` is a `usr` schema: bump `usr.setup_file`, `usr.version`, `files[0].filename`
