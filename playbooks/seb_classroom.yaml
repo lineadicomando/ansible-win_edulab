@@ -21,6 +21,10 @@
       allowQuit: false
       allowVirtualMachine: true
       enableAltTab: false
+      # SEB >= 3.10.0 drops injected keystrokes, which include the ones sent by
+      # Veyon remote control. 3.10.3 added this switch: true lets them through,
+      # but also lets any automation tool type for the student.
+      enableInjected: false
       insideSebEnableStartTaskManager: false
       browserViewMode: 1
       blockPopUpWindows: true
