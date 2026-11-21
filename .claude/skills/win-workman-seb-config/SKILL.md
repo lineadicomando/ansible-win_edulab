@@ -58,7 +58,7 @@ win_workman_seb_client_settings:
   createNewDesktop: true           # isolated Windows desktop, hides taskbar and Start
   killExplorerShell: true
   removeBrowserProfile: true       # wipe cache/profile on quit, no leakage between sessions
-  allowVirtualMachine: false       # true only for VM-based test labs
+  allowVirtualMachine: false       # true only for VM-based test labs (see allowedDisplaysIgnoreFailure)
   hookKeys: true                   # master switch — every key hook below needs it
   enableAltTab: false              # default is true
   enableAltCtrl: false             # default is true
@@ -90,7 +90,13 @@ filtering, `action: 0` (block) wins over `action: 1` (allow) when both match:
     - { action: 1, active: true, regex: true, expression: "^https://(.*[.])?gstatic[.]com(/.*)$" }
     - { action: 0, active: true, regex: true, expression: "^https://gemini[.]google[.]com" }
     - { action: 0, active: true, regex: true, expression: "^https://notebooklm[.]google" }
+  newBrowserWindowByLinkPolicy: 1  # open the form in the main window, see below
 ```
+Classroom opens a Google Form in a new browser window. SEB 3.10.3 gives that window the
+keyboard without making it active: the form's text fields take typing but show no caret
+and no focus underline. With `newBrowserWindowByLinkPolicy: 1` the form replaces Classroom
+in the main window and the caret is back (reproduced and fixed on a test VM, 2026-11-21).
+With `allowBrowsingBackForward` false, the student cannot return to Classroom afterwards.
 `playbooks/seb_classroom.yaml` is the maintained version of this — read it before writing
 a new one.
 
@@ -111,7 +117,17 @@ Defaults in parentheses; **Win only** marks keys with no Mac/iOS equivalent.
 `browserWindowAllowAddressBar` (false), `enableChromeNotifications` (**Win 3.x**, false),
 `allowPDFReaderToolbar` (**Win 3.x**, false), `downloadPDFFiles` (false),
 `removeBrowserProfile` (**Win only**, true in 3.x), `downloadAndOpenSebConfig` (true),
-`enableSebBrowser` (true — disable to use SEB as a pure kiosk launcher).
+`enableSebBrowser` (true — disable to use SEB as a pure kiosk launcher),
+`newBrowserWindowByLinkPolicy` (0 block, 1 open in the same window, 2 new window; default
+2). Secondary windows also read `newBrowserWindowAllowAddressBar`,
+`newBrowserWindowAllowReload`, `newBrowserWindowByLinkWidth` and `newBrowserWindowShowURL`
+(present in the 3.10.3 Windows config reader, not tested).
+
+**Displays** — `allowedDisplaysMaxNumber` (1), `allowedDisplaysIgnoreFailure`. When the
+display query fails SEB refuses to start ("Configurazione del display vietata",
+`[DisplayMonitor] Failed to query displays!` in the Runtime log) unless
+`allowedDisplaysIgnoreFailure` is true: 3.10.3 behaves as if it defaulted to false. The
+query fails on a QEMU/KVM test VM, so set it to true there, never in a lab config.
 
 **Kiosk / desktop** — `createNewDesktop` (**Win only**, true), `killExplorerShell`
 (**Win only**, false — use when `createNewDesktop` is false), `allowSwitchToApplications`
@@ -176,9 +192,8 @@ honoured on Windows), `hashedAdminPassword` / `hashedQuitPassword` (SHA-256 hex)
 | Key | Reason |
 |---|---|
 | `allowPreferencesWindow`, `showMenuBar`, `allowSiri`, `allowDictation`, `allowDictionaryLookup` | Mac only |
-| `newBrowserWindowByLinkPolicy` | Mac/iOS only |
 | `newBrowserWindowByScriptPolicy`, `allowScreenCapture`, `allowWindowCapture`, `blockScreenShotsLegacy` | Mac only |
-| `allowDisplayMirroring`, `allowedDisplaysMaxNumber`, `allowedDisplayBuiltin*` | Mac only |
+| `allowDisplayMirroring`, `allowedDisplayBuiltin*` | Mac only (absent from the 3.10.3 Windows config reader) |
 | `enableAAC`, `enableMacOSAAC`, `enableAppSwitcherCheck` | Mac only (`enableAAC` also deprecated) |
 | `enableBrowserWindowToolbar`, `hideBrowserWindowToolbar` | Mac only |
 | `enableJava`, `enableJavaScript`, `enablePlugIns`, `allowFlashFullscreen` | Mac only |
@@ -189,7 +204,7 @@ honoured on Windows), `hashedAdminPassword` / `hashedQuitPassword` (SHA-256 hex)
 | `copyBrowserExamKeyToClipboardWhenQuitting`, `openDownloads`, `chooseFileToUploadPolicy` | Mac only |
 | `URLFilterMessage`, `URLFilterIgnoreList` | Mac / iOS only |
 | `showNavigationButtons`, `showSettingsInApp`, `showScrollLockButton`, `enableScrollLock`, `enableDrawingEditor` | iOS only |
-| `browserWindowShowURL`, `newBrowserWindowShowURL`, `browserMediaAutoplay`, `startURLAllowDeepLink`, `startURLAppendQueryParameter`, `mobile*` | iOS only |
+| `browserWindowShowURL`, `browserMediaAutoplay`, `startURLAllowDeepLink`, `startURLAppendQueryParameter`, `mobile*` | iOS only |
 | `allowUserSwitching` | Present in the spec, not implemented |
 | `blacklistURLFilter`, `whitelistURLFilter`, `urlFilterRegex`, `urlFilterTrustedContent` | Windows, but deprecated XULRunner leftovers |
 
