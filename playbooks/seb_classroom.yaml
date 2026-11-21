@@ -10,14 +10,17 @@
   gather_facts: false
   vars:
     account_chooser: "{{ win_workman_seb_account_chooser | default('') }}"
-    win_workman_seb_client_settings_dest: 'C:\\ProgramData\\SafeExamBrowser\\SebClientSettings.seb'
+    win_workman_seb_client_settings_dest: 'C:\ProgramData\SafeExamBrowser\SebClientSettings.seb'
     win_workman_seb_client_settings:
       startURL: "https://accounts.google.com/AccountChooser?hd={{ account_chooser }}&continue=https://classroom.google.com/"
       createNewDesktop: true
       killExplorerShell: true
       allowScreenSharing: true
       enableLogging: true
-      logDirectoryWin: 'C:\\ProgramData\\SafeExamBrowser\\Logs'
+      # Single-quoted YAML keeps backslashes verbatim: one per separator. A
+      # doubled path reached SEB as written, and the logs went to
+      # %LOCALAPPDATA%\SafeExamBrowser\Logs of each user instead.
+      logDirectoryWin: 'C:\ProgramData\SafeExamBrowser\Logs'
       allowQuit: false
       allowVirtualMachine: true
       enableAltTab: false
@@ -28,6 +31,12 @@
       insideSebEnableStartTaskManager: false
       browserViewMode: 1
       blockPopUpWindows: true
+      # Open links in the main window. Classroom opens a Google Form in a new
+      # window, and SEB 3.10 gives that window keyboard input without making it
+      # active: text fields take typing but show no caret. With the form in the
+      # main window the caret is back; the price is that, with back/forward
+      # navigation disabled, the student cannot return to Classroom afterwards.
+      newBrowserWindowByLinkPolicy: 1
       clipboardPolicy: 1
       removeBrowserProfile: true
       URLFilterEnable: true
