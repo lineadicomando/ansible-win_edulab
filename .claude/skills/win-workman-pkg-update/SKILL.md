@@ -1,6 +1,6 @@
 ---
 name: win-workman-pkg-update
-description: Use when bumping a win_workman package role to a newer upstream version — covers version discovery per vendor, obtaining the sha256 without downloading where possible, the fields to edit in vars/main.yaml, the catalog doc that also carries the version, the separate git repo the collection lives in, and the commit convention
+description: Use when bumping a win_workman package role to a newer upstream version — covers version discovery per vendor, obtaining the sha256 without downloading where possible, the fields to edit in vars/main.yaml, the catalog doc that also carries the version, the separate git repo the collection lives in, the commit convention, and the patch release that brings the bump to the projects
 ---
 
 # Bumping a win_workman Package Role
@@ -161,6 +161,30 @@ the most frequent commit type in the collection — match the existing log.
 cd ansible_collections/lineadicomando/win_workman
 git add roles/<role>/vars/main.yaml docs/roles/catalog/<role>.md
 git commit && git push origin main
+```
+
+### 8. Release and pin
+
+This project pins a tag of the collection in `requirements.yaml`, and cockpit-fleet
+reinstalls the collections only when that file changes: a bump that stops at the commit
+never reaches the labs. Release it as a patch version and move the pin, in one command
+from the collection repo:
+
+```bash
+cd ansible_collections/lineadicomando/win_workman
+tools/release.sh patch --pin ~/Progetti/ansible-win_edulab/requirements.yaml \
+  --trailer "Co-Authored-By: <the attribution line of the session>"
+```
+
+Several bumps of the same session go in one release: run it once, after the last commit.
+A new role, a new action or a changed default is `minor`, not `patch`. The script refuses
+to run with uncommitted changes or a `main` not level with origin, and pushes branch and
+tag in a single push: never push them separately, the GitHub mirror drops the tag. The
+pin points at github.com, so check the tag has arrived there before syncing the project
+in cockpit-fleet:
+
+```bash
+git ls-remote --tags https://github.com/lineadicomando/ansible-collection-win_workman.git vX.Y.Z
 ```
 
 ---
