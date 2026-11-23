@@ -1,5 +1,9 @@
 ---
-# Shuts the hosts down.
+# Shuts the hosts down and waits until each one goes offline: a host whose
+# shutdown is cancelled (shutdown /a) or stuck fails the step, so wf_hosts lists
+# only the hosts that went down. -e win_workman_shutdown_wait=false returns as
+# soon as the command is sent; win_workman_shutdown_wait_timeout (900) is the
+# margin after the delay, for hosts installing updates at shutdown.
 #
 # Workflow: the last step, after the unlock (maint_unlock.yaml).
 # Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)

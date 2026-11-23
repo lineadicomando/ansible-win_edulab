@@ -37,6 +37,7 @@ runs, and asserts every step: a green run is a passing test.
 | `deploy.yaml` | A deployment playbook (`-e pb=veyon`, `seb_classroom`, `lab_coding`, `lab_cad`) installs what it lists | `win_managed`, or `-e test_hosts=` |
 | `lock.yaml` | `lock`: on/off give back notice, last username setting and logon right; repeated calls, fallback users, reset | one Windows |
 | `autoshutdown.yaml` | `autoshutdown`: schedule forms, validation, off; the task fires daily and weekly, and not on other days | one to three Windows |
+| `shutdown_wait.yaml` | `shutdown` waits for the host to go offline, fails on a cancelled shutdown, returns at once with `win_workman_shutdown_wait=false` or `shutdown-no_wait`; no revert | one Windows |
 | `shutdown_if_nouser.yaml` | `shutdown-if-nouser`: stays on with an Active or Disconnected session, shuts down without | one Windows |
 | `usr_zed.yaml` | Per-user deferred install (`usr` action) with domain users, on `zed`; builds the domain first | DC, one Windows |
 | `samba_share.yaml` | Shared folders: SMB access per user, drive mapping at logon, revoke, delete; on a domain that is already up | DC, one Windows |

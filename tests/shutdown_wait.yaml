@@ -1,0 +1,158 @@
+---
+# Test for the wait of the shutdown role: shutdown waits until the host goes
+# offline, and fails when it does not.
+#
+#   ansible-playbook tests/shutdown_wait.yaml
+#   ansible-playbook tests/shutdown_wait.yaml -e vm_host=student01
+#
+# Needs no revert: it only schedules and cancels shutdowns. On one host:
+#   1. win_workman_shutdown_wait=false, and shutdown-no_wait with the variable
+#      true: each returns while the host is still up, and shutdown-abort
+#      cancels it
+#   2. a shutdown cancelled during the delay fails the wait, with the message
+#      that names the cause
+#   3. shutdown with the default settings returns only once the port is closed,
+#      and libvirt then sees the domain shut off
+# Every step asserts its outcome, so a green run is a passing test.
+
+- name: Wake target VM
+  ansible.builtin.import_playbook: ../playbooks/wol.yaml
+  vars:
+    target_hosts: "{{ vm_host | default('teacher') }}"
+
+- name: Wait for the shutdown - shutdown
+  hosts: "{{ vm_host | default('teacher') }}"
+  gather_facts: false
+  vars:
+    shutdown_test_port: "{{ ansible_port | default(22) }}"
+  tasks:
+    - name: Authorize SSH
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [openssh-harden]
+
+    # 1. Fire and forget
+    - name: Shutdown without waiting
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown]
+        win_workman_shutdown_timeout: 120
+        win_workman_shutdown_wait: false
+
+    - name: Check the port right after the command
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ shutdown_test_port }}"
+        timeout: 5
+      delegate_to: localhost
+      register: shutdown_test_nowait_port
+      failed_when: false
+
+    - name: Cancel the pending shutdown
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown-abort]
+
+    - name: Assert shutdown returned with the host still up
+      ansible.builtin.assert:
+        that: shutdown_test_nowait_port.state is defined
+        fail_msg: "The port was already closed: shutdown did not return straight away"
+
+    - name: Shutdown-no_wait with the wait on
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown-no_wait]
+        win_workman_shutdown_timeout: 120
+        win_workman_shutdown_wait: true
+
+    - name: Check the port right after no_wait
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ shutdown_test_port }}"
+        timeout: 5
+      delegate_to: localhost
+      register: shutdown_test_no_wait_port
+      failed_when: false
+
+    - name: Cancel the shutdown of no_wait
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown-abort]
+
+    - name: Assert shutdown-no_wait returned with the host still up
+      ansible.builtin.assert:
+        that: shutdown_test_no_wait_port.state is defined
+        fail_msg: "The port was already closed: shutdown-no_wait did not return straight away"
+
+    # 2. A cancelled shutdown fails the wait. The abort runs on the host in the
+    #    background, inside the delay of the shutdown that follows it: the
+    #    dispatcher takes some seconds before the command, so the abort comes
+    #    late enough to find it, and well before the delay ends.
+    - name: Cancel the shutdown from the host in a few seconds
+      ansible.windows.win_powershell:
+        script: |
+          Start-Sleep -Seconds 60
+          shutdown.exe /a
+      async: 180
+      poll: 0
+
+    - name: Shutdown that gets cancelled
+      block:
+        - name: Run shutdown
+          ansible.builtin.include_role:
+            name: lineadicomando.win_workman.dispatcher
+          vars:
+            win_workman_tasks: [shutdown]
+            win_workman_shutdown_timeout: 180
+            win_workman_shutdown_wait_timeout: 30
+
+        - name: Note that the wait did not fail
+          ansible.builtin.set_fact:
+            shutdown_test_cancel_msg: ""
+      rescue:
+        - name: Note the failure of the wait
+          ansible.builtin.set_fact:
+            shutdown_test_cancel_msg: "{{ ansible_failed_result.msg | default('') }}"
+
+    - name: Assert the cancelled shutdown failed the wait
+      ansible.builtin.assert:
+        that: "'shutdown cancelled' in shutdown_test_cancel_msg"
+        fail_msg: "Wait outcome: '{{ shutdown_test_cancel_msg }}'"
+
+    # 3. The default: waits until the host is down
+    - name: Shutdown with the defaults
+      ansible.builtin.include_role:
+        name: lineadicomando.win_workman.dispatcher
+      vars:
+        win_workman_tasks: [shutdown]
+        win_workman_shutdown_timeout: 10
+
+    - name: Check the port once shutdown has returned
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ shutdown_test_port }}"
+        timeout: 5
+      delegate_to: localhost
+      register: shutdown_test_wait_port
+      failed_when: false
+
+    - name: Assert the port was closed when shutdown returned
+      ansible.builtin.assert:
+        that: shutdown_test_wait_port.state is not defined
+        fail_msg: "The port still answers: shutdown returned before the host went down"
+
+    - name: Wait for libvirt to see the domain shut off
+      ansible.builtin.command: virsh -c qemu:///system domstate {{ libvirt_domain }}
+      register: shutdown_test_domstate
+      until: shutdown_test_domstate.stdout | trim == 'shut off'
+      retries: 24
+      delay: 5
+      changed_when: false
+      delegate_to: localhost
+      environment:
+        LC_ALL: C  # virsh translates the state: "terminato" on an Italian host
