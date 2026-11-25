@@ -1,26 +1,30 @@
 ---
-# Runs any win_workman task strings, given in t as a comma-separated list or a
-# list: t=chrome,vscode, t=wu-run,restart, t=firefox-off. The full catalogue is
-# the roles/ directory of the collection, or get_role_info of the MCP server.
+# Runs any win_workman task strings, given in todo as a comma-separated list
+# or a list: todo=chrome,vscode, todo=wu-run,restart, todo=firefox-off. The
+# full catalogue is the roles/ directory of the collection, or get_role_info of
+# the MCP server.
 #
-#   ansible-playbook playbooks/win_wm.yaml -l teacher -e t=chrome
+#   ansible-playbook playbooks/win_wm.yaml -l teacher -e todo=chrome
+#
+# t is the old name, still accepted; when both are given, todo wins.
 #
 # It runs on win_managed (or target_hosts), so it no longer reaches the domain
-# controller or other hosts outside it. A survey on t gives an operator every
-# action of the collection: keep such a template for administrators, and give
-# operators the playbooks of one step (software.yaml, wu_run.yaml, ...).
+# controller or other hosts outside it. A survey on todo gives an operator
+# every action of the collection: keep such a template for administrators, and
+# give operators the playbooks of one step (software.yaml, wu_run.yaml, ...).
 # The run_tasks tool of the MCP server calls the collection's playbook itself.
-# A wol in t (t=wol,chrome) wakes the hosts before the other tasks, whatever its
-# place in the list: a host has to be awake for the dispatcher to reach it.
+# A wol in todo (todo=wol,chrome) wakes the hosts before the other tasks,
+# whatever its place in the list: a host has to be awake for the dispatcher to
+# reach it.
 #
-# Survey: t (text) task strings joined by commas
+# Survey: todo (text) task strings joined by commas
 # Passes on: wf_hosts, wf_unreachable, wf_failed (see tasks/wf_step.yaml)
 - name: Windows workstations manager
   hosts: "{{ wf_hosts | default(target_hosts | default('win_managed' if 'win_managed' in groups else 'lab_win')) }}"
   gather_facts: false
   vars:
-    t: ""
-    _t_list: "{{ t.split(',') | map('trim') | select | list if t is string else t }}"
+    todo: "{{ t | default('') }}"
+    _t_list: "{{ todo.split(',') | map('trim') | select | list if todo is string else todo }}"
   tasks:
     - name: Run the tasks
       ansible.builtin.import_tasks: tasks/wf_step.yaml

@@ -9,7 +9,7 @@ description: Use when testing win_workman package roles against lab VMs — cove
 
 Testing a package role means running each standard pkg action against a known-clean VM,
 verifying both that changes happen and that the role is idempotent. All commands go
-through `playbooks/win_wm.yaml` via the `-l <host>` limit and `-e '{"t":"<task>"}'` extra var.
+through `playbooks/win_wm.yaml` via the `-l <host>` limit and `-e '{"todo":"<task>"}'` extra var.
 
 ---
 
@@ -36,7 +36,7 @@ background so the lifecycles run in parallel, if the host has the memory for bot
 ### 2. Power on (Wake-on-LAN)
 
 ```bash
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"wol"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"wol"}'
 ```
 
 ### 3. Authorize SSH key access
@@ -45,7 +45,7 @@ Run once after each snapshot revert to set up key-based SSH so subsequent plays 
 prompt for credentials:
 
 ```bash
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"openssh-harden"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"openssh-harden"}'
 ```
 
 ### SSH access for manual verification
@@ -82,16 +82,16 @@ not a fixed `C:\Windows\Temp\ansible`.
 ## Test command pattern
 
 ```bash
-ansible-playbook -l <host> playbooks/win_wm.yaml -e '{"t":"<schema>[-<action>]"}'
+ansible-playbook -l <host> playbooks/win_wm.yaml -e '{"todo":"<schema>[-<action>]"}'
 ```
 
 - `-l <host>` — limit to a single inventory host (e.g., `teacher`, `student01`)
-- `t` — task string forwarded to the dispatcher; omitting the action defaults to `on`
+- `todo` (old name `t`) — task string forwarded to the dispatcher; omitting the action defaults to `on`
 
 Multiple tasks in one run (comma-separated):
 
 ```bash
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-download,chrome-copy,chrome"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-download,chrome-copy,chrome"}'
 ```
 
 ---
@@ -123,13 +123,13 @@ under test.
 ### Example commands (chrome)
 
 ```bash
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-info"}'
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-download"}'
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-copy"}'
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome"}'
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-on"}'
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-is_present"}'
-ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"t":"chrome-off"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-info"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-download"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-copy"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-on"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-is_present"}'
+ansible-playbook -l teacher playbooks/win_wm.yaml -e '{"todo":"chrome-off"}'
 ```
 
 ---
@@ -140,7 +140,7 @@ For a full lifecycle test that can be re-run cleanly, follow this structure:
 
 > **Wake through `../playbooks/wol.yaml`** with `target_hosts`, and run
 > `openssh-harden` inside the test play. `win_wm.yaml` now honours
-> `target_hosts` too (default `win_managed`, a `wol` in `t` wakes first), but
+> `target_hosts` too (default `win_managed`, a `wol` in `todo` wakes first), but
 > its gate fails a host that is still booting: `wol.yaml` waits for it. Check
 > with `ansible-playbook <test> --list-hosts`.
 

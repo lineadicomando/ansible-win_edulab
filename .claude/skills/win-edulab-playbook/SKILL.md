@@ -62,13 +62,14 @@ Rules:
 
 ## Dispatcher playbook — win_wm.yaml
 
-`playbooks/win_wm.yaml` runs any task strings given in `t`, on `win_managed`
-(or `target_hosts`); a `wol` in `t` becomes `wf_wake`:
+`playbooks/win_wm.yaml` runs any task strings given in `todo` (the old `t`
+still works; `todo` wins), on `win_managed` (or `target_hosts`); a `wol` in the
+list becomes `wf_wake`:
 
 ```bash
 ansible-playbook playbooks/win_wm.yaml -i inventories/school/hosts.yaml \
-  -l students -e "t=chrome,vscode"
-ansible-playbook playbooks/win_wm.yaml -l teacher -e "t=wol,chrome-off"
+  -l students -e "todo=chrome,vscode"
+ansible-playbook playbooks/win_wm.yaml -l teacher -e "todo=wol,chrome-off"
 ```
 
 Via MCP use `run_tasks` instead (it calls the collection's playbook directly) —
@@ -126,7 +127,7 @@ Files in `tests/` chain multiple plays with `import_playbook`:
 | Variable | Purpose |
 |----------|---------|
 | `target_hosts` | Override target group (`-e target_hosts=student01`) |
-| `t` | Task list for win_wm.yaml (`-e "t=chrome,vscode"`) |
+| `todo` | Task list for win_wm.yaml (`-e "todo=chrome,vscode"`); `t` is the old name |
 | `wf_tolerant` | Step succeeds even when hosts fail; set on workflow step templates |
 | `wf_connect_timeout` | Seconds the gate waits for each host (30) |
 | `win_workman_*` | Role-specific configuration variables |
@@ -139,7 +140,7 @@ Files in `tests/` chain multiple plays with `import_playbook`:
 ansible-playbook playbooks/win_wm.yaml \
   -i inventories/<lab>/hosts.yaml \
   -l students \
-  -e "t=chrome"
+  -e "todo=chrome"
 ```
 
 The default inventory is `school` (from `ansible.cfg`). Always specify `-i inventories/<lab>/hosts.yaml` for all other labs.

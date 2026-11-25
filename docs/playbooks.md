@@ -93,7 +93,7 @@ to a rescue): it is recorded in `wf_failed` and the step fails with exit code
 | `wf_report.yaml` | none: reads what the steps passed on | `wf_fail_on_unreachable` |
 | **Software and configuration** | | |
 | `software.yaml` | the survey's list, or `win_edulab_software` | `software` |
-| `win_wm.yaml` | any task strings | `t` |
+| `win_wm.yaml` | any task strings | `todo` (or the old `t`) |
 | `lab_cad.yaml`, `lab_coding.yaml` | example package sets (default groups `lab_cad`, `lab_coding`) | |
 | `veyon.yaml` | `veyon`, `veyon-config` | |
 | `domain_join.yaml` | `domain-join` | |
@@ -164,18 +164,19 @@ ansible-playbook playbooks/wol.yaml
 
 ### `win_wm.yaml` — any win_workman task
 
-Runs the task strings given in `t`, on `win_managed` unless `target_hosts` or
-`-l` say otherwise. A `wol` in the list wakes the hosts first, wherever it is.
+Runs the task strings given in `todo`, on `win_managed` unless `target_hosts`
+or `-l` say otherwise. The old name `t` is still accepted; `todo` wins when
+both are given. A `wol` in the list wakes the hosts first, wherever it is.
 The `run_tasks` MCP tool does not use it: it calls the collection's playbook.
 
 ```bash
-ansible-playbook playbooks/win_wm.yaml -l teacher -e "t=wol,chrome,python314"
-ansible-playbook playbooks/win_wm.yaml -e "t=firefox-off"
+ansible-playbook playbooks/win_wm.yaml -l teacher -e "todo=wol,chrome,python314"
+ansible-playbook playbooks/win_wm.yaml -e "todo=firefox-off"
 ```
 
 Task format: `<software>[-<action>]` — default action is `on` (install). The
 full catalogue is the `roles/` directory of the win_workman collection, or the
-`get_role_info` MCP tool. A template with a survey on `t` hands an operator
+`get_role_info` MCP tool. A template with a survey on `todo` hands an operator
 every action of the collection: keep it for administrators.
 
 ### `software.yaml` — the software set of a lab
