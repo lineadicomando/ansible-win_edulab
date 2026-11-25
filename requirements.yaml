@@ -2,4 +2,4 @@
 collections:
   - name: git+https://github.com/lineadicomando/ansible-collection-win_workman.git
     type: git
-    version: v0.8.0
+    version: v0.9.0
