@@ -34,3 +34,15 @@ from cockpit-samba-dc, whose own MCP servers (`samba-dc`, `addcctl`) can be adde
 next to these: see its README.
 
 For complete documentation on how to install, configure, and extend the MCP servers, refer to the [mcp.md](mcp.md) file.
+
+## Skills for cockpit-fleet
+
+`.fleet/skills/` holds skills in the same format for the assistant of
+[cockpit-fleet](https://github.com/lineadicomando/cockpit-fleet), which runs
+this project from its own interface: how to operate the labs with the
+playbooks (`win-edulab-operations`), how an inventory is laid out
+(`win-edulab-inventory`) and how interventions are reported in Fleet's
+documents (`win-edulab-reports`). They speak of Fleet's job templates and
+workflows, not of the MCP servers above, and hold nothing of a real site;
+the collection win_workman brings its own skill, with the catalog of its
+roles. Keep them in step with `docs/playbooks.md` when a playbook changes.
