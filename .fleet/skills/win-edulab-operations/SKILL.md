@@ -30,7 +30,7 @@ playbook below, then to the template that runs it on the inventory wanted
 | `maint_wim_scan.yaml` | DISM /ScanHealth of the component store | fail on repairable |
 | `maint_wim_repair.yaml` | DISM /RestoreHealth: long, up to an hour a PC | source |
 | `maint_sfc.yaml` | sfc /scannow | restart first |
-| `maint_optimize.yaml` | retrim (SSD) or defragmentation (HDD) | defrag |
+| `maint_optimize.yaml` | what Windows does by media type: retrim on SSDs, analysis *and* defragmentation on HDDs (long); there is no analysis alone | `win_workman_optimize_defrag`: defragment SSDs too (not recommended); false does not spare HDDs |
 | **Windows Update** | | |
 | `wu_scan.yaml` | lists the updates offered, changes nothing | |
 | `wu_run.yaml` | installs updates of a profile: security, full, upgrades | `wu_profile` |
