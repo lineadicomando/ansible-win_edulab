@@ -18,11 +18,11 @@ description: Use when reading, writing, or debugging inventory files for this pr
 | Inventory | Description |
 |-----------|-------------|
 | `school`        | Default lab — local dev/test environment |
-| `<site>_<lab>`  | Site inventories, one per lab (e.g. `siteA_info`, `siteA_ling`). Their names and layout are in `CLAUDE.local.md` |
+| `<site>_<lab>`  | Site inventories, one per lab (e.g. `siteA_info`, `siteA_ling`), kept by each site where its labs are operated (for example in cockpit-fleet) |
 | `<site>_aule`   | Classroom PCs, not a lab: flat `aule` group, no teachers/students split, per-host `ansible_user` |
 
 Only `school` is tracked by git; `.gitignore` excludes `inventories/*` and re-includes it.
-The site inventories exist locally only.
+Site inventories are never committed. A development checkout needs only `school`, plus throwaway inventories for a test.
 
 ---
 

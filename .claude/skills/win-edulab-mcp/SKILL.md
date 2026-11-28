@@ -38,7 +38,7 @@ description: Use when operating the win-edulab MCP server — running tasks or p
 
 **Rule**: always use `preview=true` before destructive operations (`-off`, `shutdown`, `logoff`, `lock`) or operations that require extra variables.
 
-**Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (the site inventories are listed in `CLAUDE.local.md`; `get_inventory` errors list them too) to both `get_inventory` and `run_tasks`/`run_playbook`.
+**Inventory**: the default is `school`. For any other lab always pass `inventory=<name>` (`get_inventory` errors list the available ones) to both `get_inventory` and `run_tasks`/`run_playbook`.
 
 ---
 
