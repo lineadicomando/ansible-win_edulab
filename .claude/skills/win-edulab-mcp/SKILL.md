@@ -1,6 +1,6 @@
 ---
 name: win-edulab-mcp
-description: Use when operating the win-edulab MCP server — running tasks or playbooks on lab hosts, running one-off PowerShell through run_powershell, discovering inventory, querying role capabilities, and composing multi-role operations via run_tasks or run_playbook.
+description: Use when operating the win-edulab and win-workman MCP servers — run_tasks, run_playbook, run_powershell, get_inventory, get_role_info, long runs in the background, multi-role operations
 ---
 
 # win-edulab MCP — Operational Guide

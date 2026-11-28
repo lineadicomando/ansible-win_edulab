@@ -1,6 +1,6 @@
 ---
 name: ansible-jinja2
-description: "Use when WRITING or DEBUGGING Jinja2 expressions ({{ }}, filters, tests, ternary, loops), FIXING type-safety issues in ansible-core 2.20 (explicit int|bool|list conversion, None→'' for str type), or CONVERTING Python patterns to Jinja2 (list comprehensions→map/select, dict comprehensions→dict2items). Covers what IS and IS NOT supported in Jinja2 >= 3.1.0. Trigger: filter-chain, list-comprehension, ternary, dict2items, type-safety, None-to-empty"
+description: "Use when writing or debugging Jinja2 in Ansible (filters, tests, ternary, loops), fixing ansible-core 2.20 type-safety errors (explicit int/bool/list, None to empty string) or converting Python patterns (comprehensions to map/select, dict2items). Trigger: filter-chain, list-comprehension, ternary, dict2items, type-safety"
 ---
 
 # Jinja2 in Ansible (ansible-core 2.20)

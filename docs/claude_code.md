@@ -1,6 +1,6 @@
 # MCP and Claude Code Integration
 
-The project integrates three **MCP** (Model Context Protocol) servers that expose the lab operations to Claude Code, enabling the management of workstations via natural language.
+Two **MCP** (Model Context Protocol) servers expose the project to Claude Code, which uses them to develop and test the playbooks and the win_workman roles.
 
 ## Claude Code Skills
 
@@ -12,12 +12,14 @@ The skills located in `.claude/skills/` are loaded by Claude Code when a user's 
 | `win-edulab-inventory` | Multi-lab inventory layout and conventions |
 | `win-edulab-playbook` | Writing playbooks; `playbooks/` vs `tests/` vs `local/` |
 | `win-edulab-vault` | Vault secrets: location, naming, encrypt/decrypt |
+| `win-edulab-test-vms` | Building, starting, reverting and snapshotting the test VMs |
+| `win-edulab-vm-gui` | Screenshots, clicks and typing on a test VM's desktop |
 | `win-workman-task-syntax` | Task strings and the dispatcher |
 | `win-workman-schema` | Package schema variables |
 | `win-workman-new-role` | Adding a software role to win_workman |
 | `win-workman-pkg-utils` | `pkg_utils` task includes |
 | `win-workman-pkg-update` | Bumping a package role to a newer upstream version |
-| `win-workman-pkg-test` | Testing package roles on lab VMs |
+| `win-workman-pkg-test` | Testing package roles on the test VMs |
 | `win-workman-seb-config` | Safe Exam Browser client settings |
 | `veyon-deploy`, `veyon-reference` | Veyon deployment, access control and LDAP |
 | `ansible-jinja2` | Jinja2 expressions and type safety in ansible-core 2.20 |

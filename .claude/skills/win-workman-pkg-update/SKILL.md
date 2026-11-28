@@ -1,6 +1,6 @@
 ---
 name: win-workman-pkg-update
-description: Use when bumping a win_workman package role to a newer upstream version — covers version discovery per vendor, obtaining the sha256 without downloading where possible, the fields to edit in vars/main.yaml, the catalog doc that also carries the version, the separate git repo the collection lives in, the commit convention, and the patch release that brings the bump to the projects
+description: Use when bumping a win_workman package role to a newer upstream version — version discovery, sha256 without downloading, fields in vars/main.yaml and the catalog doc, commit convention, and the patch release with tools/release.sh
 ---
 
 # Bumping a win_workman Package Role

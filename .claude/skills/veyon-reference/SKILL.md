@@ -1,6 +1,6 @@
 ---
 name: veyon-reference
-description: Use when designing Veyon access control rules (deny-by-default, conditions, AND/OR/NOT, rule order) or wiring Veyon to LDAP/Active Directory including Samba AD DC (bind DN, object trees, attribute mapping, filters, computer locations) — the parts the win_workman veyon role does not manage. Trigger: veyon access control, AccessControl/Rules, veyon LDAP, veyon ldap query, base DN, deny-by-default
+description: "Use when designing Veyon access control rules or wiring Veyon to LDAP/AD including Samba AD DC (bind DN, object trees, attribute mapping, filters, locations) — what the veyon role does not manage. Trigger: veyon access control, AccessControl/Rules, veyon LDAP, base DN"
 ---
 
 # Veyon — access control and LDAP reference

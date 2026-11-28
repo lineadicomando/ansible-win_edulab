@@ -1,6 +1,6 @@
 ---
 name: veyon-deploy
-description: Use when installing or configuring Veyon on lab workstations in this project — covers the win_workman veyon role (task strings, master vs agent, keypair lifecycle, lab network objects from inventory) and the troubleshooting that actually applies here. Trigger: veyon, veyon-config, win_workman_veyon_master, win_workman_veyon_labs, authkeys, VeyonService
+description: "Use when installing or configuring Veyon with the win_workman veyon role — task strings, master vs agent, keypair lifecycle, network objects from the inventory, troubleshooting. Trigger: veyon, veyon-config, win_workman_veyon_master, win_workman_veyon_labs, authkeys, VeyonService"
 ---
 
 # Veyon deployment — win-edulab project

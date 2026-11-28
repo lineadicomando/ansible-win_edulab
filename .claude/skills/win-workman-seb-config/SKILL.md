@@ -1,6 +1,6 @@
 ---
 name: win-workman-seb-config
-description: Use when writing, auditing or looking up a win_workman_seb_client_settings block for Safe Exam Browser on Windows — covers the seb role actions, the baseline exam lockdown, every key that is effective on Windows SEB 3.x with its default, and the Mac/iOS/deprecated keys that silently do nothing. Trigger: seb, SebClientSettings, win_workman_seb_client_settings, seb-deploy, clipboardPolicy, URLFilterRules, exam lockdown
+description: "Use when writing or auditing win_workman_seb_client_settings for Safe Exam Browser on Windows — seb role actions, baseline exam lockdown, the keys effective on Windows SEB 3.x with defaults, and the ones that silently do nothing. Trigger: seb, SebClientSettings, clipboardPolicy, URLFilterRules"
 ---
 
 # Safe Exam Browser configuration — win_workman

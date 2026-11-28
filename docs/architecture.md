@@ -36,6 +36,7 @@ The organization of files and folders within the project is as follows:
 ├── .claude/
 │   ├── settings.json
 │   └── skills/                         # Claude Code skills
+├── .fleet/skills/                      # Skills for the assistant of cockpit-fleet
 ├── inventories/
 │   └── school/                         # Reference inventory (other inventories are gitignored)
 │       ├── hosts.yaml                  # Lab host inventory
@@ -49,7 +50,7 @@ The organization of files and folders within the project is as follows:
 │       │   └── win_managed/vars.yaml       # SSH/PowerShell connection settings
 │       └── host_vars/
 ├── playbooks/                          # Shared, reusable playbooks (see above)
-├── local/                              # Site-specific and one-off playbooks (gitignored)
+├── local/                              # One-off playbooks and workstation files (gitignored)
 ├── mcp/
 │   ├── server.py                       # MCP server entry point
 │   ├── ansible_runner.py               # ansible-playbook subprocess wrapper
@@ -62,6 +63,7 @@ The organization of files and folders within the project is as follows:
 ├── bin/
 │   └── wmlog                           # Follow a background MCP run
 ├── logs/                               # MCP run logs (gitignored)
+├── tools/                              # vm/vmgui.py (test VM desktop), win_usb.sh (ISO to UEFI USB stick)
 ├── tests/                              # Test playbooks and VM lifecycle utilities (see tests/README.md)
 ├── docs/                               # Project documentation
 │   ├── mcp.md                          # MCP server full documentation

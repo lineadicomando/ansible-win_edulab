@@ -1,6 +1,6 @@
 ---
 name: win-edulab-test-vms
-description: Use when building, starting, reverting or snapshotting the test VMs of this project (QEMU/KVM, libvirt) — covers the inventory fields that describe a VM, the unattended Windows build with tests/vm_build_windows.yaml and the preseeded DC build with tests/vm_build_dc.yaml, the resource check before starting VMs, tests/virsh.yaml, the baseline snapshot, the evaluation expiry, and the manual fallback when an unattended install stalls
+description: Use when building, starting, reverting or snapshotting the test VMs (QEMU/KVM) — inventory fields of a VM, unattended builds with tests/vm_build_windows.yaml and tests/vm_build_dc.yaml, the resource check, tests/virsh.yaml, baseline snapshot, evaluation expiry, manual fallback
 ---
 
 # Test VMs — build and lifecycle

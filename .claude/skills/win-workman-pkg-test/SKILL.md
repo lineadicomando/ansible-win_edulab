@@ -1,6 +1,6 @@
 ---
 name: win-workman-pkg-test
-description: Use when testing win_workman package roles against lab VMs — covers VM lifecycle (snapshot revert, wake-on-LAN, SSH setup), the manual test command pattern, and the standard action sequence for pkg role validation
+description: Use when testing win_workman package roles on the test VMs — VM lifecycle (snapshot revert, wake-on-LAN, SSH), the manual test command pattern, the standard action sequence for pkg role validation
 ---
 
 # win_workman Package Role Testing

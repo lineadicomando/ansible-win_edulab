@@ -1,16 +1,18 @@
 # EduLab Management
 
-Ansible project for managing a didactic computer lab: a Samba 4 Active
-Directory Domain Controller on Debian and Windows 11 workstations.
+Ansible project for managing the Windows 11 workstations of didactic computer
+labs, optionally joined to an Active Directory domain (the Samba 4 DC of the test
+environment comes from cockpit-samba-dc). Its playbooks are steps that
+[cockpit-fleet](https://github.com/lineadicomando/cockpit-fleet) runs as job
+templates and workflows; they run the same from the command line.
 
 The control node is a **Linux** machine (Debian, Fedora, or an equivalent
 current distribution), preferably with **QEMU/KVM** available for the test VMs
 used by the playbooks in `tests/`. Running the control node on Windows through
 WSL2 is documented as a compatibility option, not as the reference setup.
 
-Three **MCP servers** (Model Context Protocol) expose lab operations to Claude
-Code, enabling natural-language management of workstations directly from the AI
-assistant. A set of **Claude Code skills** embedded in the project assists in
+Two **MCP servers** (Model Context Protocol) expose the project to Claude Code
+for development and testing. A set of **Claude Code skills** embedded in the project assists in
 writing playbooks, roles, and configurations following project conventions —
 both are first-class features of the project alongside the Ansible automation.
 
