@@ -466,8 +466,8 @@ a second condition:
     - "'nodep' not in (win_workman_task_argv | default([]))"
 ```
 
-The `# win_workman_dep: <fqcn>` comment above each block is the marker the catalog docs are
-generated from — keep it in sync.
+The `# win_workman_dep: <fqcn>` comment above each block marks the edge for
+`grep -rn win_workman_dep roles/`; keep it in sync (nothing generates docs from it).
 
 Current dependency edges: `winfsp` → `virtiogt`; `mysql_server`, `mysql_workbench`, `ntop`,
 `seb`, `sketchup2026` → `vcredist14`; `gcpw`, `googledrive` → `chrome`.

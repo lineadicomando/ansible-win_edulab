@@ -256,8 +256,8 @@ Two things in that guard are easy to get wrong, and both have been bugs:
 - Use **`default('on', true)`**, not bare `default('on')`. A bare task string like
   `winfsp` parses with `act` as the empty string, which a plain `default` leaves alone.
 
-The `# win_workman_dep:` comment is the marker the catalog docs are generated from — keep
-it. The `nodep` condition lets `<schema>-on-nodep` skip the dependency.
+The `# win_workman_dep:` comment marks the dependency for readers and for
+`grep -rn win_workman_dep roles/`; nothing generates docs from it, but keep it. The `nodep` condition lets `<schema>-on-nodep` skip the dependency.
 
 Hooks stay correct across a dependency without any extra work, because `include_tasks`
 resolves the hook file from `win_workman_schema.role` — a field of the schema dict passed
@@ -309,15 +309,15 @@ notes: >
 
 ## Step 5 — Documentation
 
-Create `docs/roles/catalog/<schema>.md` from the appropriate template:
-- `docs/roles/TEMPLATE-software-simple.md` — roles with only on/off/download/info
-- `docs/roles/TEMPLATE-software-custom.md` — roles with additional custom actions
+Create `docs/roles/catalog/<schema>.md` following `docs/roles/TEMPLATE.md`: only the
+role-specific actions, the variables of `defaults/` and the notes the code does not make
+obvious; no installer name or version (they live in `vars/main.yaml`).
 
 Core and management roles live in `docs/roles/core/` and `docs/roles/management/`
 instead. Update `docs/index.md` to add the role to the catalog table.
 
-The catalog doc carries an `Installer:` line repeating the setup filename — it has to be
-re-edited on every version bump. See **win-workman-pkg-update**.
+Then run `python3 tools/fleet_skills.py` in the collection: it regenerates the
+cockpit-fleet skill catalog from the manifests, and CI fails when it is stale.
 
 ---
 
@@ -333,9 +333,9 @@ For the full list of `schema.package` fields and what each one does, see
 - [ ] `tasks/main.yaml` — hooks passed via `vars:` to `pkg_workflow`, not in `defaults/`
 - [ ] `tasks/main.yaml` — dependencies guard on `(win_workman_task.act | default('on', true)) == 'on'`, with the `# win_workman_dep:` marker comment
 - [ ] `meta/main.yaml` — present
-- [ ] `meta/mcp.yaml` — present if the role has custom actions or user-facing defaults
-- [ ] `docs/roles/catalog/<schema>.md` — created from template
-- [ ] `docs/index.md` — role added to catalog table
+- [ ] `meta/mcp.yaml` — present (required: without it the role is invisible to MCP), then `python3 tools/fleet_skills.py`
+- [ ] `docs/roles/catalog/<schema>.md` — following `docs/roles/TEMPLATE.md`
+- [ ] `docs/index.md` — one row in its family's table
 - [ ] Checksum verified (`sha256sum <installer>`)
 - [ ] `searchName` matches actual Windows registry `DisplayName`
 - [ ] per-user role: `usr.uninstall_key` read from HKCU after a manual install, `setup_file` matches a `files` entry with sha256, tested with a copy of `tests/usr_zed.yaml`

@@ -1,6 +1,6 @@
 ---
 name: win-workman-pkg-update
-description: Use when bumping a win_workman package role to a newer upstream version — version discovery, sha256 without downloading, fields in vars/main.yaml and the catalog doc, commit convention, and the patch release with tools/release.sh
+description: Use when bumping a win_workman package role to a newer upstream version — version discovery, sha256 without downloading, fields in vars/main.yaml, commit convention, and the patch release with tools/release.sh
 ---
 
 # Bumping a win_workman Package Role
@@ -8,8 +8,7 @@ description: Use when bumping a win_workman package role to a newer upstream ver
 ## Overview
 
 A version bump touches four things: the installer filename, the `version` field, the
-download URL and the sha256 checksum — plus the catalog doc, which repeats the installer
-name. Everything else in the schema (`install_args`, `uninstall_args`,
+download URL and the sha256 checksum, all in `vars/main.yaml`. Everything else in the schema (`install_args`, `uninstall_args`,
 `uninstall_valid_rc`, hooks) stays put unless the test says otherwise.
 
 For what each schema field *means*, see `win-workman-schema`. For validating the bump on
@@ -111,22 +110,11 @@ Leave `searchName`, `install_args`, `uninstall_args`, `uninstall_valid_rc`,
 `cleanup_paths` and the hook scripts untouched. If the test later fails, *then* revisit
 them — a new major is the usual reason.
 
-### 5. Update the catalog doc
+### 5. The role page needs no edit
 
-`docs/roles/catalog/<role>.md` carries an `Installer:` line that repeats the filename:
-
-```
-Installer: `Vivaldi.8.2.4133.52.x64.exe`
-```
-
-45 of the catalog docs have this line. Some use a wildcard (`gimp-*.exe`) or a
-placeholder (`Opera_<version>_Setup_x64.exe`) and need no edit; the ones with a literal
-version do. Check before committing:
-
-```bash
-cd ansible_collections/lineadicomando/win_workman
-grep -oE 'Installer: `[^`]+`' docs/roles/catalog/<role>.md
-```
+`docs/roles/catalog/<role>.md` no longer repeats the installer name or the version
+(they live only in `vars/main.yaml`). Edit the page only when the bump changes
+behaviour (new install args, a new uninstall path, a renamed registry entry).
 
 ### 6. Test on a VM
 
@@ -159,7 +147,7 @@ the most frequent commit type in the collection — match the existing log.
 
 ```bash
 cd ansible_collections/lineadicomando/win_workman
-git add roles/<role>/vars/main.yaml docs/roles/catalog/<role>.md
+git add roles/<role>/vars/main.yaml
 git commit && git push origin main
 ```
 
@@ -222,8 +210,6 @@ For an MSI where the bump also needs a new `ProductCode`, extract it with
   this file.
 - **Scraped version looks wrong** — download pages list archived releases; sorting the
   matches surfaced `5.6.2867.62` alongside `8.2.4133.52` for Vivaldi.
-- **Stale catalog doc** — easy to forget step 5. `adobe_reader_dc` is still drifted
-  this way in the repo; `vscode` was, and was realigned when it was bumped to 1.137.0.
 - **`download` re-downloads every run afterwards** — the checksum does not match the
   file; re-hash rather than deleting the field.
 - **Templated URL roles** — editing the literal string does nothing when the URL is built
